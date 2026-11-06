@@ -129,7 +129,9 @@ export async function all<T = Row>(sql: string, params: QueryParam[] = []): Prom
   const values = normalise(params);
   if (dialect === "sqlite") {
     const db = await initSqlite();
-    return db.prepare(sql).all(...values) as T[];
+    // node:sqlite returns null-prototype rows; React refuses to serialise those
+    // across the server/client boundary, so normalise to plain objects.
+    return (db.prepare(sql).all(...values) as Record<string, unknown>[]).map((row) => ({ ...row })) as T[];
   }
   const p = await initPostgres();
   const result = await p.query(toPgPlaceholders(sql), values);
