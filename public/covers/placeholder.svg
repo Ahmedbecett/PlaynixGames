@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#141B2E"/><stop offset="1" stop-color="#0A0E18"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" fill="url(#bg)"/>
+  <g opacity="0.5" stroke="#8B5CF6" stroke-width="1.5" fill="none">
+    <path d="M0 320 L160 220 L320 320 L480 220 L640 320"/>
+  </g>
+  <circle cx="320" cy="200" r="52" fill="rgba(255,122,24,.14)" stroke="#FF7A18" stroke-opacity=".5"/>
+  <path d="M306 176 l44 24 -44 24z" fill="#FF7A18" opacity=".9"/>
+  <text x="320" y="300" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#A1AABD" letter-spacing="4">PLAYNIX</text>
+</svg>
