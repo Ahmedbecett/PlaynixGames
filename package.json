@@ -20,7 +20,11 @@
     "covers": "node scripts/gen-covers.mjs",
     "welcome": "node scripts/gen-welcome.mjs",
     "games:check": "node scripts/check-games.mjs",
-    "bot:check": "tsx scripts/check-bot.ts"
+    "bot:check": "tsx scripts/check-bot.ts",
+    "sdk:build": "cd sdk && npm run build",
+    "sdk:test": "cd sdk && npm test",
+    "sdk:typecheck": "cd sdk && npm run typecheck",
+    "sdk:check": "tsx scripts/check-sdk.ts"
   },
   "dependencies": {
     "next": "15.5.29",

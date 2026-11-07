@@ -11,14 +11,14 @@ Built as an independent product: own brand, own database, own code. Nothing is r
 | Area | Status | Notes |
 | --- | --- | --- |
 | Home, search, categories, game details | ✅ | Server-rendered, real DB queries, no mock data |
-| Instant play (HTML5) | ✅ | 6 licensed, self-hosted Playnix Originals, iframe player with pause/fullscreen/error handling |
+| Instant play (HTML5) | ✅ | 16 self-hosted Playnix Originals (7 free additions + 3 subscription titles in the latest drop), iframe player with pause/fullscreen/error handling |
 | Search engine | ✅ | Partial name, keywords, developer, category, tags; filters, sort, infinite scroll, recent + popular searches, suggest-a-game |
 | Telegram auth | ✅ | `initData` HMAC validation server-side, signed HttpOnly session, tested positive/negative |
 | Favorites, play history, ratings/reviews, reports | ✅ | Persisted per user, unique rating per account, server recomputes aggregates |
 | Premium gating | ✅ | Enforced in the player route and the play API, never in the client only |
 | Telegram Stars | ⚠️ implemented, needs a live bot | Invoice creation via Bot API, server-side fulfilment on `successful_payment`, idempotent replay protection, refund revocation. **Not executed against Telegram in this environment** (no outbound access to `api.telegram.org` here) |
 | Admin dashboard | ✅ | Real aggregates, game CRUD + URL verification, users, reviews, reports, ads, plans, announcements, logs, system health |
-| Bot commands | ⚠️ implemented, needs a live bot | `/start /games /search /popular /new /premium /profile /help /language` + broadcasts. Verified by code path, not by live Telegram round-trip |
+| Bot commands | ✅ | `/start /subscribe /premium /popular /new /language /help` + broadcasts; `/start` sends a branded photo with a one-tap Stars subscribe button (21 offline contract tests) |
 | i18n (ar / en / fr) + RTL | ✅ | Every UI string from typed dictionaries; Arabic flips to RTL |
 | Security | ✅ | CSP, HMAC sessions, admin roles, rate limits, SSRF-guarded URL checks, audit log, input validation |
 
@@ -95,15 +95,43 @@ docs/                      architecture, API, deployment, admin guide, testing, 
 
 ---
 
-## The six bundled games
+## The bundled games
 
-All six are **Playnix Originals** — original code and art owned by this project, so there is no third-party licensing risk in shipping them. Each one is a real game with touch + keyboard input, pause handling and local high scores.
+All sixteen are **Playnix Originals** — original code and generated art owned by this project, so there is no third-party licensing risk in shipping them. Each one is a real game with touch + keyboard input, pause handling and local high scores.
 
-`Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` · `Reversi Duel` (premium)
+Free: `Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` ·
+`Tetra Stack` · `Tile Merge` · `Flap Quest` · `Maze Escape` · `Penalty Shot` · `Speed Runner` · `Sudoku Grid`
+
+Subscription: `Tower Guard` · `Dungeon Depths` · `Card Blitz` · `Reversi Duel`
 
 Licensing policy for adding third-party games: [`docs/GAME_SOURCES.md`](docs/GAME_SOURCES.md). **Publicly accessible ≠ free to redistribute** — nothing is published without a verified licence recorded in the `games.license` column.
 
 ---
+
+## SDK
+
+`playnix-sdk` (in [`sdk/`](./sdk)) is a standalone, dependency-free TypeScript package for anyone
+building on top of this deployment — including its own bot.
+
+```bash
+npm run sdk:build      # ESM + CJS + .d.ts into sdk/dist
+npm run sdk:test       # 21 contract tests, run against the built package
+```
+
+```ts
+// browser / mini app
+import { initMiniApp, haptic, resolveStartParam, startParam } from "playnix-sdk";
+
+// server / bot
+import { TelegramBot, createWebhookHandler, parseStarsPayment, validateInitData } from "playnix-sdk/server";
+import { PlaynixClient } from "playnix-sdk";
+
+const playnix = new PlaynixClient({ baseUrl: "https://playnix-ashen.vercel.app" });
+await playnix.signIn(initData);                        // validates + stores the session cookie
+const { premium, subscription } = await playnix.me();
+```
+
+Full reference (Arabic) and examples: [`sdk/README.md`](./sdk/README.md), [`sdk/examples`](./sdk/examples).
 
 ## Secrets
 

@@ -55,11 +55,28 @@ SMOKE_DB_ONLY=1 DATABASE_URL=… DATABASE_POOL_MAX=1 npm run smoke
 | Group | Checks |
 | --- | --- |
 | Database & catalog | 22 tables exist; 16 games; unique slugs; every published game has a launch URL; premium titles exist (3 subscription games + Reversi Duel); 16 categories; active plans with Stars prices |
-| Game verification | Every published HTML5 game passes the real launch checks (≥5 required) — 6/6 |
+| Game verification | Every published HTML5 game passes the real launch checks (≥5 required) — 16/16 |
 | Telegram auth | Valid `initData` accepted; tampered payload rejected; 48h-old payload rejected |
 | Search | Partial name, description keyword, unknown query → 0 rows, category filter, premium filter |
 | Stars fulfilment | Verified payment activates Premium, expiry stored, replay is idempotent, unknown payload refused |
 | HTTP surface | Home 200 + renders real cards, security headers, `/api/games`, game details, player for a free game, **premium player redirects**, 404 for unknown slug, `/admin` not public, `/api/admin/dashboard` → 401, reviews → 401 when anonymous, cross-origin write → 403, all six game bundles served |
+
+### SDK (`playnix-sdk`)
+
+The SDK ships with two independent layers of verification, both runnable offline:
+
+```bash
+npm run sdk:build      # tsc ESM + CJS, then postbuild asserts dist/esm, dist/cjs and .d.ts
+npm run sdk:test       # 21 contract tests against the built output (node:test)
+npm run sdk:check      # live contract check; defaults to http://localhost:3000, or PLAYNIX_BASE=…
+```
+
+| Layer | What it proves | Result |
+| --- | --- | --- |
+| `sdk:test` | `initData` HMAC (golden vector, tamper, expiry, wrong token), webhook secret rejection + `update_id` de-duplication + error policy, Bot API error surfacing, invoice payload shape (`XTR`), client query building, `PlaynixError` mapping (`premium_required`, `rate_limited` retryable), session-cookie capture, timeout vs network distinction, deep-link/`start_param` routing | **21/21** |
+| `sdk:check` | The published client against a real server: health, 16 categories, 16 games, 4 premium titles, search, game detail, plan prices (`250/650/2000 XTR`), unauthenticated `me`/`createInvoice`/`startPlaySession` → `unauthorized`, unknown game → `not_found`, deep links | **16/16** |
+
+The live check caught one real drift while being written (`playableUrl` returns the asset path, not the `/play/` route), which is exactly why it is kept in the repo.
 
 ### Not executed here (and why)
 

@@ -81,4 +81,20 @@ Handles: commands, callback queries (language switch), `pre_checkout_query`, `me
 
 ## Health
 
-`GET /api/health` → `{ ok, dialect, checks }` (database reachability + configured integrations).
+`GET /api/health` → `{ ok, dialect, catalog: { publishedGames }, integrations: [{ key, ok, detail }], timestamp }`
+(database reachability + configured integrations, never secret values).
+
+## TypeScript SDK
+
+Every endpoint above is wrapped by [`playnix-sdk`](../sdk/README.md), published from `sdk/`:
+
+```ts
+import { PlaynixClient } from "playnix-sdk";
+import { validateInitData, TelegramBot, createWebhookHandler } from "playnix-sdk/server";
+
+const playnix = new PlaynixClient({ baseUrl: "https://playnix-ashen.vercel.app" });
+await playnix.signIn(initData);        // validates the signature server-side, stores the cookie
+const { premium } = await playnix.me();
+```
+
+`npm run sdk:build` · `npm run sdk:test` · `npm run sdk:check` (live contract check).
