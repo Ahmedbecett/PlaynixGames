@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Speed Runner</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; padding:10px 16px; font-size:12px; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--muted); }
+  header b { color:var(--text); font-variant-numeric:tabular-nums; font-size:15px; }
+  #stage { flex:1; position:relative; display:grid; place-items:center; padding:0 8px; }
+  canvas { display:block; border-radius:18px; background:linear-gradient(180deg,#0b1024,#090B14 70%);
+    box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); touch-action:none; }
+  #bar { display:flex; gap:8px; justify-content:center; padding:8px 10px 16px; }
+  #bar button { flex:1; max-width:190px; padding:14px; border-radius:14px; border:1px solid rgba(139,92,246,.35);
+    background:rgba(23,30,48,.92); color:var(--text); font-weight:700; font-size:14px; }
+  #bar button:active { background:rgba(255,122,24,.25); border-color:var(--accent); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.86); backdrop-filter:blur(6px); }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card); border:1px solid rgba(34,211,238,.25); max-width:320px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px; color:#0b0f18;
+    background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span>Distance <b id="dist">0</b>m</span><span>Coins <b id="coins">0</b></span><span>Best <b id="best">0</b></span></header>
+  <div id="stage">
+    <canvas id="game" width="800" height="420" aria-label="Speed Runner"></canvas>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Speed Runner</h1>
+        <p id="hint">Tap or press Space to jump, hold the slide button (or ArrowDown) to duck. Collect coins, dodge everything.</p>
+        <button id="startBtn">Start game</button>
+      </div>
+    </div>
+  </div>
+  <div id="bar">
+    <button id="jumpBtn">▲ Jump</button>
+    <button id="slideBtn">▼ Slide</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const distEl = document.getElementById("dist");
+  const coinsEl = document.getElementById("coins");
+  const bestEl = document.getElementById("best");
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+  const hintEl = document.getElementById("hint");
+  const KEY = "playnix.speed-runner.best";
+
+  const W = 800, H = 420;
+  const GROUND = H - 72;
+  const GRAVITY = 2400;
+
+  let player, obstacles, coinList, speed, distance, coins, best, running, paused, spawnTimer, coinTimer, last, scale, sliding;
+
+  best = Number(localStorage.getItem(KEY) || 0);
+  bestEl.textContent = String(best);
+
+  function resize() {
+    const stage = canvas.parentElement;
+    const ratio = H / W;
+    let w = stage.clientWidth - 16;
+    let h = stage.clientHeight - 10;
+    if (w * ratio > h) w = h / ratio;
+    const cw = Math.floor(w), ch = Math.floor(w * ratio);
+    scale = cw / W;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.style.width = cw + "px";
+    canvas.style.height = ch + "px";
+    canvas.width = Math.floor(cw * dpr);
+    canvas.height = Math.floor(ch * dpr);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    draw();
+  }
+
+  function reset() {
+    player = { x: 130, y: GROUND - 70, w: 36, h: 70, vy: 0, onGround: true, sliding: false };
+    obstacles = [];
+    coinList = [];
+    speed = 420;
+    distance = 0;
+    coins = 0;
+    spawnTimer = 0;
+    coinTimer = 0;
+    sliding = false;
+    distEl.textContent = "0";
+    coinsEl.textContent = "0";
+  }
+
+  function start() {
+    reset();
+    running = true; paused = false;
+    overlay.classList.add("hidden");
+    last = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function gameOver() {
+    running = false;
+    const score = Math.floor(distance) + coins * 10;
+    if (score > best) { best = score; localStorage.setItem(KEY, String(best)); bestEl.textContent = String(best); }
+    overlay.classList.remove("hidden");
+    hintEl.textContent = "Ran " + Math.floor(distance) + "m with " + coins + " coins — score " + score + ". " + (score >= best && score > 0 ? "Personal best!" : "One more run?");
+    startBtn.textContent = "Play again";
+  }
+
+  function jump() {
+    if (!running || paused) return;
+    if (player.onGround) {
+      player.vy = -880;
+      player.onGround = false;
+      player.sliding = false;
+    }
+  }
+
+  function setSlide(on) {
+    if (!running || paused) return;
+    sliding = on;
+    if (on && player.onGround) { player.sliding = true; }
+    else if (!on) player.sliding = false;
+  }
+
+  function spawnObstacle() {
+    const high = Math.random() < 0.35;
+    if (high) {
+      obstacles.push({ x: W + 40, y: GROUND - 96, w: 34, h: 40, kind: "high" });
+    } else {
+      const tall = Math.random() < 0.4;
+      obstacles.push({ x: W + 40, y: GROUND - (tall ? 76 : 46), w: tall ? 34 : 26, h: tall ? 76 : 46, kind: "low" });
+    }
+  }
+
+  function spawnCoin() {
+    coinList.push({ x: W + 40, y: GROUND - 110 - Math.random() * 90, r: 11, spin: Math.random() * Math.PI });
+  }
+
+  function hit(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+
+  function update(dt) {
+    speed = Math.min(1000, 420 + distance * 1.6);
+    distance += (speed * dt) / 12;
+    distEl.textContent = String(Math.floor(distance));
+
+    player.vy += GRAVITY * dt;
+    player.y += player.vy * dt;
+    if (player.y >= GROUND - (player.sliding ? 40 : 70)) {
+      player.y = GROUND - (player.sliding ? 40 : 70);
+      player.vy = 0;
+      player.onGround = true;
+      if (!sliding) player.sliding = false;
+    } else {
+      player.onGround = false;
+    }
+    player.h = player.sliding ? 40 : 70;
+    if (player.onGround) player.y = GROUND - player.h;
+
+    spawnTimer += dt;
+    if (spawnTimer > Math.max(0.62, 1.35 - distance / 900)) { spawnTimer = 0; spawnObstacle(); }
+    coinTimer += dt;
+    if (coinTimer > 0.9) { coinTimer = 0; spawnCoin(); }
+
+    const box = { x: player.x + 6, y: player.y + 4, w: player.w - 12, h: player.h - 8 };
+
+    for (const obstacle of obstacles) {
+      obstacle.x -= speed * dt;
+      const oBox = { x: obstacle.x + 4, y: obstacle.y + 3, w: obstacle.w - 8, h: obstacle.h - 6 };
+      if (hit(box, oBox)) { gameOver(); return; }
+    }
+    obstacles = obstacles.filter((o) => o.x + o.w > -30);
+
+    for (const coin of coinList) {
+      coin.x -= speed * dt;
+      coin.spin += dt * 5;
+      const cb = { x: coin.x - coin.r, y: coin.y - coin.r, w: coin.r * 2, h: coin.r * 2 };
+      if (hit(box, cb)) { coin.taken = true; coins += 1; coinsEl.textContent = String(coins); }
+    }
+    coinList = coinList.filter((c) => !c.taken && c.x > -30);
+  }
+
+  function draw() {
+    if (!scale) return;
+    ctx.clearRect(0, 0, W, H);
+
+    // skyline
+    ctx.fillStyle = "rgba(139,92,246,.10)";
+    for (let i = 0; i < 14; i += 1) {
+      const x = ((i * 97 - (distance * 2) % 97)) % (W + 120) - 40;
+      const h = 60 + ((i * 53) % 140);
+      ctx.fillRect(x, GROUND - h - 40, 64, h);
+    }
+
+    // ground
+    const g = ctx.createLinearGradient(0, GROUND, 0, H);
+    g.addColorStop(0, "#1b2236");
+    g.addColorStop(1, "#090B14");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.strokeStyle = "rgba(255,122,24,.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(W, GROUND); ctx.stroke();
+    ctx.strokeStyle = "rgba(34,211,238,.25)";
+    for (let i = 0; i < 24; i += 1) {
+      const x = (i * 70 - (distance * 12) % 70);
+      ctx.beginPath(); ctx.moveTo(x, GROUND + 22); ctx.lineTo(x + 26, GROUND + 22); ctx.stroke();
+    }
+
+    // coins
+    for (const coin of coinList) {
+      ctx.fillStyle = "#FACC15";
+      ctx.shadowColor = "rgba(250,204,21,.8)";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.ellipse(coin.x, coin.y, Math.abs(Math.cos(coin.spin)) * coin.r + 2, coin.r, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // obstacles
+    for (const obstacle of obstacles) {
+      ctx.fillStyle = obstacle.kind === "high" ? "#EF4444" : "#8B5CF6";
+      ctx.shadowColor = obstacle.kind === "high" ? "rgba(239,68,68,.7)" : "rgba(139,92,246,.7)";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h, 8);
+      else ctx.rect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(248,250,252,.5)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // player
+    if (player) {
+      const h = player.sliding ? 40 : 70;
+      const y = GROUND - h;
+      ctx.fillStyle = "#FF7A18";
+      ctx.shadowColor = "rgba(255,122,24,.85)";
+      ctx.shadowBlur = 22;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(player.x, y, player.w, h, 12);
+      else ctx.rect(player.x, y, player.w, h);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#090B14";
+      ctx.beginPath(); ctx.arc(player.x + player.w - 12, y + 16, 4.5, 0, Math.PI * 2); ctx.fill();
+      // legs trail
+      ctx.strokeStyle = "rgba(255,122,24,.4)";
+      ctx.lineWidth = 3;
+      for (let i = 1; i <= 3; i += 1) {
+        ctx.beginPath();
+        ctx.moveTo(player.x - i * 12, y + h - 10);
+        ctx.lineTo(player.x - i * 12, y + h - 30);
+        ctx.stroke();
+      }
+    }
+
+    if (paused && running) {
+      ctx.fillStyle = "rgba(9,11,20,.66)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#F8FAFC";
+      ctx.font = "600 34px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Paused", W / 2, H / 2);
+    }
+  }
+
+  function loop(now) {
+    if (!running) return;
+    const dt = Math.min(0.04, (now - last) / 1000 || 0);
+    last = now;
+    if (!paused) { update(dt); draw(); }
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener("click", start);
+  canvas.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    if (!running) return;
+    const rect = canvas.getBoundingClientRect();
+    const relY = (event.clientY - rect.top) / rect.height;
+    if (relY > 0.7) setSlide(true);
+    else jump();
+  });
+  canvas.addEventListener("pointerup", () => setSlide(false));
+  document.getElementById("jumpBtn").addEventListener("pointerdown", (event) => { event.preventDefault(); jump(); });
+  document.getElementById("slideBtn").addEventListener("pointerdown", (event) => { event.preventDefault(); setSlide(true); });
+  document.getElementById("slideBtn").addEventListener("pointerup", () => setSlide(false));
+  document.getElementById("slideBtn").addEventListener("pointerleave", () => setSlide(false));
+
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Space" || event.code === "ArrowUp" || event.code === "KeyW") {
+      event.preventDefault();
+      if (!running) start(); else jump();
+    }
+    if (event.code === "ArrowDown" || event.code === "KeyS") { event.preventDefault(); setSlide(true); }
+    if (event.code === "KeyP" && running) { paused = !paused; draw(); }
+  });
+  window.addEventListener("keyup", (event) => {
+    if (event.code === "ArrowDown" || event.code === "KeyS") setSlide(false);
+  });
+
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { paused = true; draw(); } });
+  window.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type === "playnix:pause" && running) { paused = true; draw(); }
+    if (data.type === "playnix:resume" && running) { paused = false; last = performance.now(); }
+  });
+  window.addEventListener("resize", resize);
+
+  running = false;
+  reset();
+  resize();
+})();
+</script>
+</body>
+</html>

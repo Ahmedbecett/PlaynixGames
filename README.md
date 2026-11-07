@@ -32,7 +32,7 @@ Legend: ✅ verified locally · ⚠️ implemented, blocked on live credentials/
 cp .env.example .env.local     # fill in the values you have
 npm install
 npm run db:migrate             # creates the schema (SQLite locally)
-npm run db:seed                # 16 categories, 6 games, 3 premium plans
+npm run db:seed                # 16 categories, 16 games, 3 premium plans
 npm run dev                    # http://localhost:3000
 ```
 
@@ -115,4 +115,4 @@ Never commit real credentials. `.env.local` is gitignored; only `.env.example` s
 
 ## License
 
-Application code © Playnix. The six games in `public/games/` are original works by this project and may not be redistributed separately without permission. Third-party dependencies keep their own licenses (see `package.json`).
+Application code © Playnix. The sixteen games in `public/games/` are original works by this project and may not be redistributed separately without permission. Third-party dependencies keep their own licenses (see `package.json`).

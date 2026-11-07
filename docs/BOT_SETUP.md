@@ -47,6 +47,23 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
    ```
 6. `/setjoingroups` → **Disable** (a Mini App bot has no reason to sit in groups).
 
+## 2b. Subscription funnel and welcome picture
+
+The bot is the sales channel, so `/start` is not a plain text greeting:
+
+- `sendPhoto` with `public/brand/welcome.jpg` (regenerate with `npm run welcome`) and an HTML caption.
+- Inline keyboard: **Play now** (mini app), **⭐ Subscribe to Premium** (`callback_data: premium:plans`),
+  **👑 Premium games** (mini app `/premium`).
+- `premium:plans` lists every active plan with a `buy:<planId>` button; tapping one calls
+  `createStarsInvoice` (which stores a `pending` row in `payments`) and replies with a **pay** URL button.
+  Paying inside the chat fires `successful_payment` at `/api/telegram/webhook`, which grants the
+  subscription and confirms the expiry date.
+- If Telegram rejects the photo (bad URL, oversized file), the handler falls back to a text message.
+- `scripts/ensure-bot.ts` also publishes `setMyCommands` on every deploy, so the blue menu lists
+  `/start`, `/subscribe`, `/premium`, `/popular`, `/new`, `/language`, `/help`.
+
+`npx tsx scripts/check-bot.ts` exercises the whole funnel offline (fetch is intercepted).
+
 ## 3. Register the webhook (bot side)
 
 > **On Vercel this is automatic.** `npm run build` starts with `prebuild`, which runs

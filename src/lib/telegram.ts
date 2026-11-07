@@ -189,3 +189,40 @@ export async function setChatMenuButton(miniAppUrl: string, label = "Open Playni
     menu_button: { type: "web_app", text: label, web_app: { url: miniAppUrl } },
   });
 }
+
+/**
+ * Sends a photo with an HTML caption. Used for the branded welcome message and
+ * for the subscription pitch — a picture converts far better than plain text.
+ */
+export async function sendPhoto(
+  chatId: string | number,
+  photoUrl: string,
+  caption: string,
+  options: { replyMarkup?: Record<string, unknown> } = {},
+) {
+  return callTelegramApi("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption,
+    parse_mode: "HTML",
+    reply_markup: options.replyMarkup,
+  });
+}
+
+/** Removes the loading spinner from an inline button after a tap. */
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  options: { alert?: boolean } = {},
+) {
+  return callTelegramApi("answerCallbackQuery", {
+    callback_query_id: callbackQueryId,
+    text,
+    show_alert: options.alert ?? false,
+  });
+}
+
+/** Publishes the command list shown in Telegram's blue menu button. */
+export async function setMyCommands(commands: { command: string; description: string }[]) {
+  return callTelegramApi("setMyCommands", { commands });
+}

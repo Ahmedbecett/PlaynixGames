@@ -7,7 +7,7 @@
  * the admin panel can register the webhook manually (Admin → System).
  */
 import { env } from "../src/lib/env";
-import { getMe, setChatMenuButton, setWebhook } from "../src/lib/telegram";
+import { getMe, setChatMenuButton, setMyCommands, setWebhook } from "../src/lib/telegram";
 
 async function main() {
   if (!env.botToken) {
@@ -29,8 +29,20 @@ async function main() {
     console.log(`[playnix] Bot reachable: @${bot.username} (${bot.id})`);
     await setWebhook(`${appUrl}/api/telegram/webhook`, env.webhookSecret);
     console.log(`[playnix] Webhook → ${appUrl}/api/telegram/webhook`);
-    await setChatMenuButton(appUrl, "Open Playnix");
+    await setChatMenuButton(appUrl, "Play now");
     console.log(`[playnix] Menu button → ${appUrl}`);
+
+    // Subscription-first command menu: the blue "Menu" button lists these.
+    await setMyCommands([
+      { command: "start", description: "ابدأ اللعب · Play · Jouer" },
+      { command: "subscribe", description: "اشترك في بريميوم · Subscribe · S'abonner" },
+      { command: "premium", description: "الألعاب المميزة · Premium games · Jeux premium" },
+      { command: "popular", description: "الأكثر لعبًا · Trending · Tendances" },
+      { command: "new", description: "أحدث الألعاب · New games · Nouveautés" },
+      { command: "language", description: "اللغة · Language · Langue" },
+      { command: "help", description: "المساعدة · Help · Aide" },
+    ]);
+    console.log("[playnix] Command menu published (7 commands)");
   } catch (error) {
     console.log(
       `[playnix] Bot wiring skipped (${error instanceof Error ? error.message : "unknown error"}). Register it from Admin → System.`,

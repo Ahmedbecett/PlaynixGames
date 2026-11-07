@@ -25,7 +25,9 @@ The production engine was executed for real, not assumed: PostgreSQL 18 (PGlite/
 | Phase | Result |
 | --- | --- |
 | `ensureSchema()` — full 22-table schema | created cleanly on PostgreSQL |
-| `db:seed` — 16 categories, 6 games, 3 plans | 30 rows inserted |
+| `db:seed` — 16 categories, 16 games, 3 plans | 40 rows inserted |
+| `npm run games:check` — boots all 16 games in jsdom | 16/16 clean (start, keys, buttons) |
+| `npm run bot:check` — subscription funnel offline | photo welcome, 3 plan buttons, XTR invoice, text fallback |
 | DB suite (`SMOKE_DB_ONLY=1`) | **20/20** |
 | HTTP suite (`SMOKE_HTTP_ONLY=1`) | **18/18** |
 | 13 admin pages + 3 admin APIs | all 200 |
@@ -52,7 +54,7 @@ SMOKE_DB_ONLY=1 DATABASE_URL=… DATABASE_POOL_MAX=1 npm run smoke
 
 | Group | Checks |
 | --- | --- |
-| Database & catalog | 22 tables exist; 6 games; unique slugs; every published game has a launch URL; a premium title exists; 16 categories; active plans with Stars prices |
+| Database & catalog | 22 tables exist; 16 games; unique slugs; every published game has a launch URL; premium titles exist (3 subscription games + Reversi Duel); 16 categories; active plans with Stars prices |
 | Game verification | Every published HTML5 game passes the real launch checks (≥5 required) — 6/6 |
 | Telegram auth | Valid `initData` accepted; tampered payload rejected; 48h-old payload rejected |
 | Search | Partial name, description keyword, unknown query → 0 rows, category filter, premium filter |

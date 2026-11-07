@@ -2,8 +2,12 @@
  * Deploy-time bootstrap, wired as `prebuild`.
  *
  * On a host with DATABASE_URL (Vercel + Postgres) it applies the idempotent
- * schema and seeds the catalog the first time, so a fresh deployment works
- * without anyone opening a terminal.
+ * schema and tops the catalog up, so a fresh deployment works without anyone
+ * opening a terminal.
+ *
+ * The seed is insert-only: `ON CONFLICT DO NOTHING` per row, so existing games,
+ * plans and admin edits are never overwritten. That is what makes it safe to run
+ * on every deploy — new bundled games appear, existing ones stay untouched.
  *
  * Without DATABASE_URL (local SQLite development) it exits quietly: the schema
  * is created lazily on the first request.
@@ -22,11 +26,17 @@ async function main() {
 
   const rows = await all<{ total: unknown }>("SELECT COUNT(*) AS total FROM games");
   const existing = Number(rows[0]?.total ?? 0);
+
+  const inserted = await seedCatalog();
+  const after = await all<{ total: unknown }>("SELECT COUNT(*) AS total FROM games");
+  const total = Number(after[0]?.total ?? 0);
+
   if (existing === 0) {
-    console.log("[playnix] Empty catalog — seeding 16 categories, 6 games and 3 plans…");
-    await seedCatalog();
+    console.log(`[playnix] Empty catalog — seeded ${inserted} rows (${total} games).`);
+  } else if (inserted > 0) {
+    console.log(`[playnix] Catalog top-up: ${inserted} new rows added (${existing} → ${total} games).`);
   } else {
-    console.log(`[playnix] Catalog already has ${existing} game(s) — seed skipped.`);
+    console.log(`[playnix] Catalog already complete (${total} games) — nothing to add.`);
   }
 }
 
