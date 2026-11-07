@@ -5,7 +5,7 @@
   "description": "Playnix \u2014 Telegram gaming search engine & instant-play Mini App",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
-    "prebuild": "tsx --env-file-if-exists=.env.local scripts/ensure-db.ts",
+    "prebuild": "tsx --env-file-if-exists=.env.local scripts/ensure-db.ts && tsx --env-file-if-exists=.env.local scripts/ensure-bot.ts",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "tsc --noEmit",
