@@ -252,6 +252,22 @@ CREATE TABLE IF NOT EXISTS ad_campaigns (
   created_at    TEXT NOT NULL
 );
 
+-- Rewarded-ad unlocks: watching an ad grants short access to one premium game.
+-- Deliberately separate from `subscriptions` so ads can never masquerade as a paid
+-- entitlement in the payments ledger.
+CREATE TABLE IF NOT EXISTS ad_reward_passes (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id     TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  source      TEXT NOT NULL DEFAULT 'monetag',
+  zone        TEXT,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_passes_user ON ad_reward_passes(user_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_ad_passes_game ON ad_reward_passes(game_id);
+
 CREATE TABLE IF NOT EXISTS search_queries (
   id             TEXT PRIMARY KEY,
   user_id        TEXT REFERENCES users(id) ON DELETE SET NULL,

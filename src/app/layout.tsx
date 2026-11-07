@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { ToastProvider } from "@/components/Toast";
 import { TelegramBridge } from "@/components/TelegramBridge";
+import { AdRuntime } from "@/components/ads/AdRuntime";
 
 export const metadata: Metadata = {
   title: {
@@ -36,6 +37,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { locale, dict, dir } = await getDictionary();
   const user = await getCurrentUser();
+  const premium = user ? (await getPremiumStatus()).premium : false;
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
@@ -43,7 +45,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <LocaleProvider locale={locale} dict={dict}>
           <ToastProvider>
-            <TelegramBridge authenticated={Boolean(user)}>{children}</TelegramBridge>
+            <TelegramBridge authenticated={Boolean(user)}>
+              <AdRuntime premium={premium} />
+              {children}
+            </TelegramBridge>
           </ToastProvider>
         </LocaleProvider>
       </body>

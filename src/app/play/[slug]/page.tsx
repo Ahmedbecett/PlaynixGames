@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
+import { getActiveSubscription, getCurrentUser } from "@/lib/auth";
+import { canPlayPremiumGame } from "@/lib/ads";
 import { getPublishedGameBySlug } from "@/lib/games";
 import { GamePlayer } from "@/components/GamePlayer";
 
@@ -21,9 +22,12 @@ export default async function PlayPage({ params }: { params: Promise<{ slug: str
   if (game.game_type !== "html5" || !game.game_url) redirect(`/game/${game.slug}`);
 
   if (game.pricing_type === "premium") {
-    const [user, premium] = await Promise.all([getCurrentUser(), getPremiumStatus()]);
+    const user = await getCurrentUser();
     if (!user) redirect("/premium?reason=login");
-    if (!premium.premium) redirect("/premium?reason=locked");
+    // Paid subscription OR a rewarded-ad pass for this game (never both trusted client-side).
+    const subscription = await getActiveSubscription(user.id);
+    const allowed = await canPlayPremiumGame(user.id, game.id, Boolean(subscription));
+    if (!allowed) redirect(`/premium?reason=locked&game=${encodeURIComponent(game.slug)}`);
   }
 
   // Only same-origin paths and https URLs can reach the iframe.

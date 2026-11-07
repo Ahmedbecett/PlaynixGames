@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
+import { adUnlocksUsed, adsPolicy } from "@/lib/ads";
+import { getPublishedGameBySlug } from "@/lib/games";
+import { AdUnlockCard } from "@/components/ads/AdUnlockCard";
 import { env } from "@/lib/env";
 import { getDictionary } from "@/lib/i18n";
 import { listPlans, planFeatures } from "@/lib/payments";
@@ -9,8 +12,12 @@ import { PremiumPlans } from "@/components/PremiumPlans";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Premium" };
 
-export default async function PremiumPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
-  const { reason } = await searchParams;
+export default async function PremiumPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string; game?: string }>;
+}) {
+  const { reason, game: gameSlug } = await searchParams;
   const { dict, locale } = await getDictionary();
   const [user, premiumStatus, plans] = await Promise.all([getCurrentUser(), getPremiumStatus(), listPlans()]);
 
@@ -22,6 +29,16 @@ export default async function PremiumPage({ searchParams }: { searchParams: Prom
     durationDays: Number(plan.duration_days),
     features: planFeatures(plan),
   }));
+
+  // Rewarded ads: a third path for people who will not pay today. The card only
+  // renders when the visitor was actually stopped by a premium game, so the page
+  // never advertises "watch an ad" out of context.
+  const adPolicy = adsPolicy();
+  const lockedGame = reason === "locked" && gameSlug ? await getPublishedGameBySlug(gameSlug) : null;
+  const adOption =
+    adPolicy.enabled && user && lockedGame && lockedGame.pricing_type === "premium" && !premiumStatus.premium
+      ? { game: lockedGame, remaining: Math.max(0, adPolicy.dailyLimit - (await adUnlocksUsed(user.id))) }
+      : null;
 
   const benefits: (keyof typeof dict)[] = [
     "premium.benefit.library",
@@ -52,6 +69,15 @@ export default async function PremiumPage({ searchParams }: { searchParams: Prom
           ))}
         </ul>
       </section>
+
+      {adOption ? (
+        <AdUnlockCard
+          gameSlug={adOption.game.slug}
+          gameTitle={adOption.game.title}
+          minutes={adPolicy.rewardMinutes}
+          remainingToday={adOption.remaining}
+        />
+      ) : null}
 
       <h2 className="mb-2 text-base font-extrabold">{dict["premium.currentPlan"]}</h2>
       <PremiumPlans

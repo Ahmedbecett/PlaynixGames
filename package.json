@@ -24,7 +24,8 @@
     "sdk:build": "cd sdk && npm run build",
     "sdk:test": "cd sdk && npm test",
     "sdk:typecheck": "cd sdk && npm run typecheck",
-    "sdk:check": "tsx scripts/check-sdk.ts"
+    "sdk:check": "tsx scripts/check-sdk.ts",
+    "ads:check": "tsx scripts/check-ads.ts"
   },
   "dependencies": {
     "next": "15.5.29",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "22.18.12",
     "@types/pg": "8.15.6",
     "@types/react": "19.2.2",

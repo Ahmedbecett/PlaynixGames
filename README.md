@@ -16,6 +16,7 @@ Built as an independent product: own brand, own database, own code. Nothing is r
 | Telegram auth | ✅ | `initData` HMAC validation server-side, signed HttpOnly session, tested positive/negative |
 | Favorites, play history, ratings/reviews, reports | ✅ | Persisted per user, unique rating per account, server recomputes aggregates |
 | Premium gating | ✅ | Enforced in the player route and the play API, never in the client only |
+| Rewarded ads (Monetag) | ✅ off by default | Watch one ad → play one premium game for 20 min (3/day, server-issued pass). Config, policy and the browser wrapper are covered by `npm run ads:check`; no live ad was served in this sandbox |
 | Telegram Stars | ⚠️ implemented, needs a live bot | Invoice creation via Bot API, server-side fulfilment on `successful_payment`, idempotent replay protection, refund revocation. **Not executed against Telegram in this environment** (no outbound access to `api.telegram.org` here) |
 | Admin dashboard | ✅ | Real aggregates, game CRUD + URL verification, users, reviews, reports, ads, plans, announcements, logs, system health |
 | Bot commands | ✅ | `/start /subscribe /premium /popular /new /language /help` + broadcasts; `/start` sends a branded photo with a one-tap Stars subscribe button (21 offline contract tests) |
@@ -107,6 +108,22 @@ Subscription: `Tower Guard` · `Dungeon Depths` · `Card Blitz` · `Reversi Duel
 Licensing policy for adding third-party games: [`docs/GAME_SOURCES.md`](docs/GAME_SOURCES.md). **Publicly accessible ≠ free to redistribute** — nothing is published without a verified licence recorded in the `games.license` column.
 
 ---
+
+## Rewarded ads
+
+Free users who hit a premium game get a second path besides subscribing: watch one short
+Monetag ad and play **that** game for a few minutes. The pass is issued server-side
+(`ad_reward_passes`), capped per day, and checked by both the player route and the play API —
+the browser only reports that the ad promise resolved.
+
+```bash
+NEXT_PUBLIC_ADS_ENABLED=true
+NEXT_PUBLIC_ADS_ZONE_ID=12207042
+npm run ads:check      # 30 offline checks (config, policy, jsdom SDK behaviour)
+```
+
+Full setup, formats (rewarded interstitial, rewarded popup, in-app interstitial), CSP notes and
+the honest anti-abuse limits: [`docs/ADS.md`](docs/ADS.md).
 
 ## SDK
 
