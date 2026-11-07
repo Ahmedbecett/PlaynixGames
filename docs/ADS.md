@@ -23,9 +23,16 @@ Playnix monetises in three layers; this document covers the middle one.
    is never the authority.
 
 The third format, the **automatic in-app interstitial**, is implemented and
-**off by default** (`NEXT_PUBLIC_ADS_INAPP_ENABLED=true` to enable). It never runs
-inside `/play/*` or `/admin/*`, never runs for premium members, and is started
-once per browser session.
+**off by default** in code (`NEXT_PUBLIC_ADS_INAPP_ENABLED=true` to enable). It
+never runs inside `/play/*` or `/admin/*`, never runs for premium members, and is
+started once per browser session.
+
+> **Current production state (2026-11-07):** `NEXT_PUBLIC_ADS_ENABLED=true`,
+> `NEXT_PUBLIC_ADS_ZONE_ID=12207042`, `NEXT_PUBLIC_ADS_INAPP_ENABLED=true`
+> (production + preview on Vercel), policy `20 min / 3 per 24 h / 45 s`.
+> Flipping any of these requires a redeploy: `NEXT_PUBLIC_*` is inlined at build
+> time. To disable everything instantly, delete `NEXT_PUBLIC_ADS_ZONE_ID` — a
+> missing/invalid zone turns ads off *and* removes the ad hosts from the CSP.
 
 ## Configuration
 
