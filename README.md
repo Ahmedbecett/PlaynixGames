@@ -47,7 +47,7 @@ npm run build && npm start
 npm run bot:webhook            # registers https://<APP_URL>/api/telegram/webhook
 ```
 
-Full steps in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Full steps in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); bot wiring (BotFather, webhook, menu button, deep links, tunnel) in [`docs/BOT_SETUP.md`](docs/BOT_SETUP.md).
 
 ---
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useT } from "./LocaleProvider";
 import { useTelegram } from "./TelegramBridge";
+import { botStartAppLink, gameStartParam } from "@/lib/telegram-links";
 import { useToast } from "./Toast";
 import { Icon } from "./Icons";
 
@@ -71,7 +72,7 @@ export function GameActions({
   }
 
   async function share() {
-    const url = `${window.location.origin}/game/${slug}`;
+    const url = botStartAppLink(gameStartParam(slug)) ?? `${window.location.origin}/game/${slug}`;
     const result = await shareUrl(url, `${title} · Playnix`);
     if (result === "copied") show(t("game.shareCopied"), "success");
     if (result === "failed") show(t("common.error"), "error");

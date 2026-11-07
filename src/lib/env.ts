@@ -18,7 +18,7 @@ export const env = {
     return optional("TELEGRAM_BOT_TOKEN");
   },
   get botUsername(): string {
-    return optional("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME") ?? "PlaynixBot";
+    return optional("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME") ?? "";
   },
   get webhookSecret(): string | undefined {
     return optional("TELEGRAM_WEBHOOK_SECRET");

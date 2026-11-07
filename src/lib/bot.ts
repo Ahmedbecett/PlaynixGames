@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { all, one, run } from "./db";
 import { env } from "./env";
+import { botStartAppLink, gameStartParam } from "./telegram-links";
 import { dictionaries, normaliseLocale, type Locale } from "./i18n/shared";
 import { answerPreCheckoutQuery, sendMessage } from "./telegram";
 import { fulfilStarsPayment } from "./payments";
@@ -32,6 +33,12 @@ type TgUpdate = {
 };
 
 const appLink = () => env.appUrl;
+
+/** Link inside bot messages: opens the Mini App on that screen, else the web app. */
+function deepLink(param: string, path: string): string {
+  const startApp = botStartAppLink(param);
+  return startApp ?? `${appLink()}${path}`;
+}
 
 function text(key: keyof typeof dictionaries.en, locale: Locale, vars?: Record<string, string>): string {
   const template = dictionaries[locale][key] ?? dictionaries.en[key];
@@ -69,8 +76,9 @@ function miniAppKeyboard(locale: Locale, path = "/") {
   };
 }
 
-function gameLine(title: string, slug: string, pricing: string, locale: Locale) {
-  return `• <a href="${appLink()}/game/${slug}">${title}</a>${pricing === "premium" ? " ⭐" : ""}`;
+function gameLine(title: string, slug: string, pricing: string) {
+  const href = deepLink(gameStartParam(slug), `/game/${slug}`);
+  return `• <a href="${href}">${title}</a>${pricing === "premium" ? " ⭐" : ""}`;
 }
 
 async function listGames(kind: "popular" | "new" | "search", query = "", limit = 6) {
@@ -181,7 +189,7 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
         );
         return;
       }
-      const lines = games.map((game) => gameLine(game.title, game.slug, game.pricing_type, locale));
+      const lines = games.map((game) => gameLine(game.title, game.slug, game.pricing_type));
       await sendMessage(chatId, `<b>${text("search.resultsFor", locale, { query: argument })}</b>\n${lines.join("\n")}`, {
         replyMarkup: miniAppKeyboard(locale, `/search?q=${encodeURIComponent(argument)}`),
       });
@@ -189,14 +197,14 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     }
     case "/popular": {
       const games = await listGames("popular");
-      await sendMessage(chatId, `<b>${text("home.trending", locale)}</b>\n${games.map((g) => gameLine(g.title, g.slug, g.pricing_type, locale)).join("\n")}`, {
+      await sendMessage(chatId, `<b>${text("home.trending", locale)}</b>\n${games.map((g) => gameLine(g.title, g.slug, g.pricing_type)).join("\n")}`, {
         replyMarkup: miniAppKeyboard(locale, "/search?sort=popular"),
       });
       return;
     }
     case "/new": {
       const games = await listGames("new");
-      await sendMessage(chatId, `<b>${text("home.newGames", locale)}</b>\n${games.map((g) => gameLine(g.title, g.slug, g.pricing_type, locale)).join("\n")}`, {
+      await sendMessage(chatId, `<b>${text("home.newGames", locale)}</b>\n${games.map((g) => gameLine(g.title, g.slug, g.pricing_type)).join("\n")}`, {
         replyMarkup: miniAppKeyboard(locale, "/search?sort=newest"),
       });
       return;

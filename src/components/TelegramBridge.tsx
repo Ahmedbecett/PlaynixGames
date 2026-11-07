@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { resolveStartParam } from "@/lib/telegram-links";
 
 type HapticStyle = "light" | "medium" | "heavy" | "rigid" | "soft" | "success" | "error" | "warning";
 
@@ -26,7 +27,10 @@ const TelegramContext = createContext<TelegramContextValue>({
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type TelegramWebApp = {
   initData: string;
-  initDataUnsafe: { user?: { id: number; first_name: string; username?: string } };
+  initDataUnsafe: {
+    user?: { id: number; first_name: string; username?: string };
+    start_param?: string;
+  };
   ready: () => void;
   expand: () => void;
   setHeaderColor?: (color: string) => void;
@@ -77,6 +81,13 @@ export function TelegramBridge({
       }
       const initData = webApp.initData || "";
       setState({ isTelegram: true, initData, isPreview: false });
+
+      // `t.me/<bot>?startapp=game_slug` -> open straight on that screen.
+      const startParam = webApp.initDataUnsafe?.start_param ?? null;
+      if (startParam && window.location.pathname === "/") {
+        const path = resolveStartParam(startParam);
+        if (path && path !== "/") router.replace(path);
+      }
       if (initData && !authenticated && !attempted.current) {
         attempted.current = true;
         fetch("/api/auth/telegram", {
