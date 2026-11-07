@@ -27,9 +27,17 @@ if (process.env.NODE_ENV === "production" && dialect === "sqlite" && process.env
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-let sqlite: any = null;
-let pool: any = null;
-let migratePromise: Promise<void> | null = null;
+// Kept on globalThis so dev-server hot reloads (and serverless module reuse)
+// never leak a second connection pool.
+const globalForDb = globalThis as typeof globalThis & {
+  __playnixSqlite?: any;
+  __playnixPool?: any;
+  __playnixMigrate?: Promise<void> | null;
+};
+
+let sqlite: any = globalForDb.__playnixSqlite ?? null;
+let pool: any = globalForDb.__playnixPool ?? null;
+let migratePromise: Promise<void> | null = globalForDb.__playnixMigrate ?? null;
 
 function normalise(params: QueryParam[]): unknown[] {
   return params.map((p) => {
@@ -80,6 +88,7 @@ async function initSqlite() {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const { DatabaseSync } = await import("node:sqlite");
   sqlite = new DatabaseSync(file);
+  globalForDb.__playnixSqlite = sqlite;
   sqlite.exec("PRAGMA journal_mode = WAL;");
   sqlite.exec("PRAGMA foreign_keys = ON;");
   sqlite.exec("PRAGMA busy_timeout = 5000;");
@@ -90,11 +99,16 @@ async function initPostgres() {
   if (pool) return pool;
   const pg = await import("pg");
   const Pool = (pg as any).Pool ?? (pg as any).default?.Pool;
+  // DATABASE_POOL_MAX lets constrained environments (serverless, a local
+  // single-connection proxy) cap concurrency without touching code.
+  const max = Math.max(1, Number(process.env.DATABASE_POOL_MAX ?? 5) || 5);
   pool = new Pool({
     connectionString: env.databaseUrl,
-    max: 5,
+    max,
+    idleTimeoutMillis: max === 1 ? 0 : 10_000,
     ssl: env.databaseUrl?.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined,
   });
+  globalForDb.__playnixPool = pool;
   return pool;
 }
 
@@ -120,7 +134,10 @@ async function migrate(): Promise<void> {
 
 /** Idempotent migration guard (schema uses IF NOT EXISTS). */
 export async function ensureSchema(): Promise<void> {
-  if (!migratePromise) migratePromise = migrate();
+  if (!migratePromise) {
+    migratePromise = migrate();
+    globalForDb.__playnixMigrate = migratePromise;
+  }
   return migratePromise;
 }
 

@@ -210,11 +210,22 @@ export async function getScreenshots(gameId: string) {
 }
 
 export async function getSimilarGames(game: GameRow, limit = 8): Promise<GameRow[]> {
+  // Built in JS rather than `? IS NULL`: PostgreSQL cannot infer a type for a
+  // bare NULL parameter, and the clause is clearer when it is only present when
+  // a category exists. Same SQL, valid on both engines.
+  const values: (string | number)[] = [game.id];
+  let categoryClause = "";
+  if (game.category_id) {
+    categoryClause = "AND g.category_id = ?";
+    values.push(game.category_id);
+  }
+  values.push(game.play_count, Math.min(limit, 12));
+
   return all<GameRow>(
     `${SELECT} WHERE g.publication_status = 'published' AND g.id != ?
-       AND (g.category_id = ? OR g.category_id IS NULL AND ? IS NULL)
+       ${categoryClause}
      ORDER BY ABS(g.play_count - ?) ASC, g.rating_avg DESC LIMIT ?`,
-    [game.id, game.category_id, game.category_id, game.play_count, Math.min(limit, 12)],
+    values,
   );
 }
 

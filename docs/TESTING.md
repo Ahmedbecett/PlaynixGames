@@ -8,7 +8,45 @@ npm run dev            # terminal 1
 npm run smoke          # terminal 2
 ```
 
-Result in this environment: **38 / 38 checks passed** (`tsc --noEmit` clean, `next build` clean).
+Result in this environment: **38 / 38 checks passed** on **both engines** (`tsc --noEmit` clean, `next build` clean).
+
+The suite is split so it can be pointed at a live deployment without writing to its database:
+
+```bash
+npm run smoke                      # everything, against http://127.0.0.1:3000 + local DB
+SMOKE_DB_ONLY=1 npm run smoke      # schema / catalog / search / payments only
+SMOKE_HTTP_ONLY=1 BASE_URL=https://your-domain npm run smoke   # read-only HTTP checks
+```
+
+### PostgreSQL run (production engine)
+
+The production engine was executed for real, not assumed: PostgreSQL 18 (PGlite/WASM) served through a local socket and the app was pointed at it with `DATABASE_URL=postgres://…` + `DATABASE_POOL_MAX=1`.
+
+| Phase | Result |
+| --- | --- |
+| `ensureSchema()` — full 22-table schema | created cleanly on PostgreSQL |
+| `db:seed` — 16 categories, 6 games, 3 plans | 30 rows inserted |
+| DB suite (`SMOKE_DB_ONLY=1`) | **20/20** |
+| HTTP suite (`SMOKE_HTTP_ONLY=1`) | **18/18** |
+| 13 admin pages + 3 admin APIs | all 200 |
+| Admin write path (create → verify → delete game) | works |
+| Favorites, review with aggregate recompute, play session | works |
+
+Two queries were fixed as a result of this run (they only ever worked on SQLite):
+
+- `getSimilarGames` used `? IS NULL` inside the WHERE clause — PostgreSQL cannot infer a type for a bare NULL parameter. The clause is now built in JS.
+- Admin user search used `? IS NULL OR …` and case-sensitive `LIKE`; it now uses a conditional WHERE plus `LOWER()`.
+
+Reproduce (no server needed):
+
+```bash
+npm i --no-save @electric-sql/pglite @electric-sql/pglite-socket
+# start a PGlite socket server on 127.0.0.1:5433, then:
+DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/postgres DATABASE_POOL_MAX=1 npm run db:seed
+SMOKE_DB_ONLY=1 DATABASE_URL=… DATABASE_POOL_MAX=1 npm run smoke
+```
+
+`DATABASE_POOL_MAX` also caps connection concurrency in production (serverless limits, small Postgres plans).
 
 ### What is covered
 
