@@ -49,6 +49,14 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
 
 ## 3. Register the webhook (bot side)
 
+> **On Vercel this is automatic.** `npm run build` starts with `prebuild`, which runs
+> `scripts/ensure-db.ts` and then `scripts/ensure-bot.ts`. Whenever `TELEGRAM_BOT_TOKEN`,
+> `TELEGRAM_WEBHOOK_SECRET` and an `https://` `NEXT_PUBLIC_APP_URL` are all present in the
+> project env, every deployment re-registers the webhook and the menu button against that URL
+> (log lines: `[playnix] Bot reachable: @…`, `[playnix] Webhook → …`, `[playnix] Menu button → …`).
+> Rotating the token or moving to a custom domain therefore only needs a redeploy. The manual
+> command below is still the way to do it locally or from a tunnel.
+
 ```bash
 # .env.local or host env must contain the real values
 npm run bot:webhook
