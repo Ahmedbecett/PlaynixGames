@@ -67,17 +67,41 @@ async function main() {
   );
   check("popup fallback on by default", configured.popupFallback === true);
 
-  process.env.NEXT_PUBLIC_ADS_ZONE_ID = "not-a-zone";
-  check("invalid zone disables ads", shared.adsPublicConfig().enabled === false);
-  process.env.NEXT_PUBLIC_ADS_ZONE_ID = "12207042";
-  process.env.NEXT_PUBLIC_ADS_ENABLED = "false";
-  check("flag off disables ads", shared.adsPublicConfig().enabled === false);
-  process.env.NEXT_PUBLIC_ADS_ENABLED = "true";
+  check("invalid zone disables ads", shared.adsConfigFrom({ NEXT_PUBLIC_ADS_ZONE_ID: "not-a-zone" }).enabled === false);
+  check("missing zone disables ads", shared.adsConfigFrom({ NEXT_PUBLIC_ADS_ZONE_ID: undefined }).enabled === false);
+  check("flag off disables ads", shared.adsConfigFrom({ NEXT_PUBLIC_ADS_ENABLED: "false" }).enabled === false);
+  check("in-app can be enabled explicitly", shared.adsConfigFrom({ NEXT_PUBLIC_ADS_INAPP_ENABLED: "true" }).inApp.enabled === true);
 
   check("CSP lists the SDK host", shared.ADS_CSP.script.includes("https://libtl.com"));
   const nextConfig = fs.readFileSync(path.join(process.cwd(), "next.config.ts"), "utf8");
   check("next.config wires ADS_CSP into the CSP", nextConfig.includes("ADS_CSP") && nextConfig.includes("adsPublicConfig"));
   check("zone function name matches the provider", shared.monetagFunctionName("12207042") === "show_12207042");
+
+  // Regression guard: Next.js only inlines `process.env.NEXT_PUBLIC_*` when the
+  // property is spelled out literally. A dynamic lookup compiles to the empty
+  // browser `process` shim, which once hid every ad surface in production.
+  const sharedSource = fs.readFileSync(path.join(process.cwd(), "src", "lib", "ads-shared.ts"), "utf8");
+  // Comments mention the anti-pattern on purpose; only real code counts.
+  const sharedCode = sharedSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  check(
+    "shared config never reads env dynamically",
+    !/process\.env\[/.test(sharedCode),
+    /process\.env\[/.test(sharedCode) ? "found process.env[name]" : "",
+  );
+  const publicVars = [
+    "NEXT_PUBLIC_ADS_ENABLED",
+    "NEXT_PUBLIC_ADS_ZONE_ID",
+    "NEXT_PUBLIC_ADS_SDK_URL",
+    "NEXT_PUBLIC_ADS_POPUP_FALLBACK",
+    "NEXT_PUBLIC_ADS_INAPP_ENABLED",
+    "NEXT_PUBLIC_ADS_INAPP_FREQUENCY",
+    "NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS",
+    "NEXT_PUBLIC_ADS_INAPP_INTERVAL",
+    "NEXT_PUBLIC_ADS_INAPP_TIMEOUT",
+    "NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE",
+  ];
+  const missingLiterals = publicVars.filter((name) => !sharedSource.includes(`process.env.${name}`));
+  check("every public env var is referenced literally (inlined into the client bundle)", missingLiterals.length === 0, missingLiterals.join(", "));
 
   /* ------------------------------------------------------------- policy ---- */
   console.log("\nServer policy (throwaway SQLite)");
@@ -150,10 +174,10 @@ async function main() {
     JSON.stringify({ unlocks: stats.unlocks24h, users: stats.users24h }),
   );
 
-  process.env.NEXT_PUBLIC_ADS_ENABLED = "false";
-  const disabled = await ads.grantAdUnlock(userId, games[0].id);
+  const disabled = await ads.grantAdUnlock(userId, games[0].id, {
+    policy: { ...ads.adsPolicy(), enabled: false },
+  });
   check("disabled provider refuses grants", disabled.ok === false && disabled.reason === "disabled");
-  process.env.NEXT_PUBLIC_ADS_ENABLED = "true";
 
   /* ------------------------------------------------------------- browser --- */
   console.log("\nBrowser wrapper (synthetic Monetag SDK in jsdom)");

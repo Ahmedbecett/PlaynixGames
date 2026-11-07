@@ -90,8 +90,12 @@ export type UnlockResult =
  * Grants (or reuses) an unlock for one game.
  * Reuses an existing pass instead of burning a second ad for the same window.
  */
-export async function grantAdUnlock(userId: string, gameId: string): Promise<UnlockResult> {
-  const policy = adsPolicy();
+export async function grantAdUnlock(
+  userId: string,
+  gameId: string,
+  options: { policy?: AdsPolicy } = {},
+): Promise<UnlockResult> {
+  const policy = options.policy ?? adsPolicy();
   if (!policy.enabled) return { ok: false, reason: "disabled" };
 
   const existing = await activeAdPass(userId, gameId);

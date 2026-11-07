@@ -29,21 +29,47 @@ export type AdsPublicConfig = {
 
 const DEFAULT_SDK_URL = "https://libtl.com/sdk.js";
 
-function read(name: string): string | undefined {
-  const value = process.env[name];
+/**
+ * Every public env var this module needs, written out literally.
+ *
+ * Next.js only inlines `process.env.NEXT_PUBLIC_*` when the property is spelled
+ * out at the call site. A dynamic lookup (`process.env[name]`) is left as-is and
+ * compiles to the *empty* browser `process` shim, so the client saw
+ * `NEXT_PUBLIC_ADS_ZONE_ID === undefined` and hid every ad surface while the
+ * server (which has the real env) rendered them. Keep these literals verbatim:
+ * `scripts/check-ads.ts` fails if a dynamic lookup comes back.
+ */
+const PUBLIC_ENV = {
+  NEXT_PUBLIC_ADS_ENABLED: process.env.NEXT_PUBLIC_ADS_ENABLED,
+  NEXT_PUBLIC_ADS_ZONE_ID: process.env.NEXT_PUBLIC_ADS_ZONE_ID,
+  NEXT_PUBLIC_ADS_SDK_URL: process.env.NEXT_PUBLIC_ADS_SDK_URL,
+  NEXT_PUBLIC_ADS_POPUP_FALLBACK: process.env.NEXT_PUBLIC_ADS_POPUP_FALLBACK,
+  NEXT_PUBLIC_ADS_INAPP_ENABLED: process.env.NEXT_PUBLIC_ADS_INAPP_ENABLED,
+  NEXT_PUBLIC_ADS_INAPP_FREQUENCY: process.env.NEXT_PUBLIC_ADS_INAPP_FREQUENCY,
+  NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS: process.env.NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS,
+  NEXT_PUBLIC_ADS_INAPP_INTERVAL: process.env.NEXT_PUBLIC_ADS_INAPP_INTERVAL,
+  NEXT_PUBLIC_ADS_INAPP_TIMEOUT: process.env.NEXT_PUBLIC_ADS_INAPP_TIMEOUT,
+  NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE: process.env.NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE,
+} as const;
+
+type PublicEnvName = keyof typeof PUBLIC_ENV;
+type PublicEnvOverrides = Partial<Record<PublicEnvName, string | undefined>>;
+
+function read(source: Record<PublicEnvName, string | undefined>, name: PublicEnvName): string | undefined {
+  const value = source[name];
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : undefined;
 }
 
-function numberFrom(name: string, fallback: number): number {
-  const raw = read(name);
+function numberFrom(source: Record<PublicEnvName, string | undefined>, name: PublicEnvName, fallback: number): number {
+  const raw = read(source, name);
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function flag(name: string, fallback = false): boolean {
-  const value = read(name);
+function flag(source: Record<PublicEnvName, string | undefined>, name: PublicEnvName, fallback = false): boolean {
+  const value = read(source, name);
   if (value === undefined) return fallback;
   return value === "true" || value === "1";
 }
@@ -52,24 +78,35 @@ function flag(name: string, fallback = false): boolean {
  * Ads are only active with a real zone id — an empty id would silently break the
  * `show_<zone>()` call, so the UI hides every ad surface instead.
  */
-export function adsPublicConfig(): AdsPublicConfig {
-  const zoneId = read("NEXT_PUBLIC_ADS_ZONE_ID") ?? null;
-  const providerEnabled = read("NEXT_PUBLIC_ADS_ENABLED") === "true" || read("NEXT_PUBLIC_ADS_ENABLED") === "1";
+export function adsConfigFrom(overrides: PublicEnvOverrides = {}): AdsPublicConfig {
+  const source = { ...PUBLIC_ENV, ...overrides };
+  const zoneId = read(source, "NEXT_PUBLIC_ADS_ZONE_ID") ?? null;
+  const flagValue = read(source, "NEXT_PUBLIC_ADS_ENABLED");
+  const providerEnabled = flagValue === "true" || flagValue === "1";
   return {
     enabled: providerEnabled && Boolean(zoneId && /^\d{4,12}$/.test(zoneId)),
     provider: "monetag",
     zoneId,
-    sdkUrl: read("NEXT_PUBLIC_ADS_SDK_URL") ?? DEFAULT_SDK_URL,
-    popupFallback: flag("NEXT_PUBLIC_ADS_POPUP_FALLBACK", true),
+    sdkUrl: read(source, "NEXT_PUBLIC_ADS_SDK_URL") ?? DEFAULT_SDK_URL,
+    popupFallback: flag(source, "NEXT_PUBLIC_ADS_POPUP_FALLBACK", true),
     inApp: {
-      enabled: flag("NEXT_PUBLIC_ADS_INAPP_ENABLED", false),
-      frequency: numberFrom("NEXT_PUBLIC_ADS_INAPP_FREQUENCY", 2),
-      cappingHours: numberFrom("NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS", 0.1),
-      intervalSeconds: numberFrom("NEXT_PUBLIC_ADS_INAPP_INTERVAL", 30),
-      timeoutSeconds: numberFrom("NEXT_PUBLIC_ADS_INAPP_TIMEOUT", 5),
-      everyPage: flag("NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE", false),
+      enabled: flag(source, "NEXT_PUBLIC_ADS_INAPP_ENABLED", false),
+      frequency: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_FREQUENCY", 2),
+      cappingHours: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS", 0.1),
+      intervalSeconds: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_INTERVAL", 30),
+      timeoutSeconds: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_TIMEOUT", 5),
+      everyPage: flag(source, "NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE", false),
     },
   };
+}
+
+/**
+ * Config for the current build. Values are inlined into the client bundle at
+ * build time, so this is a compile-time snapshot — `adsConfigFrom()` exists for
+ * tests that need to exercise other combinations.
+ */
+export function adsPublicConfig(): AdsPublicConfig {
+  return adsConfigFrom();
 }
 
 /** Global function the Monetag SDK installs for a zone (`show_12207042`). */

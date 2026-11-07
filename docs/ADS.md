@@ -98,6 +98,26 @@ Responses: `200` granted/reused, `409 already_free`, `404 not_found`,
 `429 ad_limit_reached` / `ad_cooldown`, `503 ads_disabled`, `401 unauthorized`,
 `403 cross_origin`.
 
+## Troubleshooting: ads are configured but nothing appears
+
+Check the **client** bundle, not the server:
+
+```bash
+NEXT_PUBLIC_ADS_ENABLED=true NEXT_PUBLIC_ADS_ZONE_ID=12207042 npm run build
+grep -rl 12207042 .next/static | head   # must print at least one chunk
+```
+
+No output means the zone id never reached the browser. The cause is always the
+same: `process.env.NEXT_PUBLIC_*` must be written **literally** at the call site.
+Next.js inlines static lookups only, and a dynamic `process.env[name]` compiles to
+the empty browser `process` shim — the server renders the card, hydration drops
+it, and nothing is visible in Telegram no matter how correct the env vars are.
+`src/lib/ads-shared.ts` keeps every key in a literal `PUBLIC_ENV` map for exactly
+this reason, and `npm run ads:check` fails if a dynamic lookup comes back.
+
+Telegram also caches Mini App pages aggressively: after deploying, close the Mini
+App fully (not just the back button) and reopen it before concluding anything.
+
 ## Honest limits
 
 - **Ad completion cannot be proven cryptographically.** The Monetag SDK runs in
