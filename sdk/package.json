@@ -18,14 +18,24 @@
   "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/esm/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js"
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./server": {
-      "types": "./dist/esm/server/index.d.ts",
-      "import": "./dist/esm/server/index.js",
-      "require": "./dist/cjs/server/index.js"
+      "import": {
+        "types": "./dist/esm/server/index.d.ts",
+        "default": "./dist/esm/server/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/server/index.d.ts",
+        "default": "./dist/cjs/server/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -47,5 +57,27 @@
   "devDependencies": {
     "@types/node": "^22.18.12",
     "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ahmedbecett/PlaynixGames.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://playnix-ashen.vercel.app",
+  "bugs": {
+    "url": "https://github.com/Ahmedbecett/PlaynixGames/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "typesVersions": {
+    "*": {
+      "server": [
+        "dist/esm/server/index.d.ts"
+      ],
+      "*": [
+        "dist/esm/index.d.ts"
+      ]
+    }
   }
 }

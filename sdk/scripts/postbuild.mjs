@@ -10,7 +10,16 @@ fs.writeFileSync(path.join(dist, "esm", "package.json"), JSON.stringify({ type: 
 fs.writeFileSync(path.join(dist, "cjs", "package.json"), JSON.stringify({ type: "commonjs" }, null, 2));
 
 // Fail the build if a public entrypoint is missing.
-for (const file of ["esm/index.js", "cjs/index.js", "esm/server/index.js", "cjs/server/index.js", "esm/index.d.ts", "esm/server/index.d.ts"]) {
+for (const file of [
+  "esm/index.js",
+  "cjs/index.js",
+  "esm/server/index.js",
+  "cjs/server/index.js",
+  "esm/index.d.ts",
+  "cjs/index.d.ts",
+  "esm/server/index.d.ts",
+  "cjs/server/index.d.ts",
+]) {
   if (!fs.existsSync(path.join(dist, file))) {
     console.error(`✗ missing build output: dist/${file}`);
     process.exit(1);

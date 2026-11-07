@@ -156,7 +156,10 @@ npm run build    # ESM + CJS + .d.ts في dist/
 npm test         # 21 اختبار عقدي على الناتج المبني
 ```
 
-`npm pack --dry-run` يعرض محتوى الحزمة (‎~17 kB مضغوطة).
+`npm pack --dry-run` يعرض محتوى الحزمة (‎~21 kB مضغوطة، 45 ملفًا: ESM + CJS + تعريفات النوعين).
+
+الحزمة مزدوجة النشر فعليًا: `import` يقرأ `dist/esm`، و`require` يقرأ `dist/cjs` (مع `.d.ts` لكل منهما)،
+وتم التحقق من الحالتين في مشروعين مستهلكين بـ `moduleResolution: nodenext`.
 
 ## الترخيص
 

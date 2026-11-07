@@ -78,6 +78,8 @@ npm run sdk:check      # live contract check; defaults to http://localhost:3000,
 
 The live check caught one real drift while being written (`playableUrl` returns the asset path, not the `/play/` route), which is exactly why it is kept in the repo.
 
+Dual publishing was verified against real consumers, not assumed: two throwaway projects (`moduleResolution: nodenext`) importing `playnix-sdk` + `playnix-sdk/server` typecheck and run under both ESM (`import`) and CommonJS (`require`), against `dist/esm` and `dist/cjs` respectively.
+
 ### Not executed here (and why)
 
 This build sandbox has outbound access only to GitHub/npm/PyPI, so `api.telegram.org` is unreachable:
