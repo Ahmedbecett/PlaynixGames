@@ -131,6 +131,11 @@ await playnix.signIn(initData);                        // validates + stores the
 const { premium, subscription } = await playnix.me();
 ```
 
+The app itself consumes it: `src/lib/telegram.ts` is a thin adapter over `playnix-sdk/server` (config + error
+mapping only), the webhook uses the SDK's constant-time secret check, and `/api/auth/telegram` uses the SDK's
+`initData` validation — the bot that runs in production and the published package share one implementation.
+`sdk:build` runs inside `prebuild`, so a fresh clone (and Vercel) builds the package before typechecking.
+
 Full reference (Arabic) and examples: [`sdk/README.md`](./sdk/README.md), [`sdk/examples`](./sdk/examples).
 
 ## Secrets

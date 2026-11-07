@@ -5,10 +5,10 @@
   "description": "Playnix — Telegram gaming search engine & instant-play Mini App",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
-    "prebuild": "tsx --env-file-if-exists=.env.local scripts/ensure-db.ts && tsx --env-file-if-exists=.env.local scripts/ensure-bot.ts",
+    "prebuild": "npm run sdk:build && tsx --env-file-if-exists=.env.local scripts/ensure-db.ts && tsx --env-file-if-exists=.env.local scripts/ensure-bot.ts",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run sdk:build && tsc --noEmit",
     "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env.local scripts/db-seed.ts",
     "db:reset": "tsx --env-file-if-exists=.env.local scripts/db-reset.ts",
@@ -29,6 +29,7 @@
   "dependencies": {
     "next": "15.5.29",
     "pg": "8.16.3",
+    "playnix-sdk": "file:sdk",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "zod": "3.25.76"

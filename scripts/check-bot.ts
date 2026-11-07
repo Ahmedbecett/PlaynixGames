@@ -119,6 +119,31 @@ if (!String(fallbackText.body.text).includes("بلاينكس")) fail("fallback t
 console.log("✓ photo failure falls back to a text welcome");
 failPhotos = false;
 
+// 5. deploy-time wiring: webhook, menu button, command list
+const { getMe, setWebhook, setChatMenuButton, setMyCommands } = await import("../src/lib/telegram");
+mark = calls.length;
+const me = await getMe();
+await setWebhook("https://playnix.test/api/telegram/webhook", "test-secret");
+await setChatMenuButton("https://playnix.test", "Play now");
+await setMyCommands([
+  { command: "start", description: "ابدأ اللعب" },
+  { command: "subscribe", description: "اشترك في بريميوم" },
+]);
+batch = since(mark);
+if (!me?.username) fail("getMe returned no username");
+const webhook = batch.find((call) => call.method === "setWebhook");
+if (!webhook) fail("setWebhook was not called");
+if (webhook.body.url !== "https://playnix.test/api/telegram/webhook") fail(`wrong webhook url: ${webhook.body.url}`);
+if (webhook.body.secret_token !== "test-secret") fail("webhook is registered without its secret token");
+if (!JSON.stringify(webhook.body.allowed_updates).includes("callback_query")) fail("callback updates are not allowed");
+const menu = batch.find((call) => call.method === "setChatMenuButton");
+if (!menu) fail("setChatMenuButton was not called");
+if ((menu.body.menu_button as { web_app?: { url?: string } })?.web_app?.url !== "https://playnix.test") fail("menu button does not open the app");
+const commands = batch.find((call) => call.method === "setMyCommands");
+if (!commands) fail("setMyCommands was not called");
+if ((commands.body.commands as unknown[])?.length !== 2) fail("command list was not published as sent");
+console.log("✓ webhook, menu button and command list are wired through the SDK client");
+
 console.log("\nBot subscription funnel OK");
 }
 

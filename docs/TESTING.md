@@ -73,6 +73,8 @@ npm run sdk:check      # live contract check; defaults to http://localhost:3000,
 
 | Layer | What it proves | Result |
 | --- | --- | --- |
+| `bot:check` | The refactored bot over the SDK client: photo welcome, 3 plan buttons, XTR invoice, text fallback, **and** `setWebhook` (secret + allowed updates), `setChatMenuButton`, `setMyCommands` bodies | **5/5** |
+| HTTP (live server) | `POST /api/telegram/webhook` → 401 without/with wrong secret, 200 with the right one, 400 on malformed JSON; `/api/auth/telegram` accepts a signed `initData` (200 + session cookie), `/api/users/me` returns the profile, a tampered payload is rejected with `invalid` | verified |
 | `sdk:test` | `initData` HMAC (golden vector, tamper, expiry, wrong token), webhook secret rejection + `update_id` de-duplication + error policy, Bot API error surfacing, invoice payload shape (`XTR`), client query building, `PlaynixError` mapping (`premium_required`, `rate_limited` retryable), session-cookie capture, timeout vs network distinction, deep-link/`start_param` routing | **21/21** |
 | `sdk:check` | The published client against a real server: health, 16 categories, 16 games, 4 premium titles, search, game detail, plan prices (`250/650/2000 XTR`), unauthenticated `me`/`createInvoice`/`startPlaySession` → `unauthorized`, unknown game → `not_found`, deep links | **16/16** |
 

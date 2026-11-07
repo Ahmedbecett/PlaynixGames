@@ -1,6 +1,7 @@
 /**
  * playnix-sdk/server — bot-side entrypoint (Node 18+, needs `node:crypto`).
  */
+export { PlaynixError, TelegramError } from "../errors.js";
 export {
   buildDataCheckString,
   computeInitDataHash,

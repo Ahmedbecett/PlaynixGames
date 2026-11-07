@@ -3,34 +3,11 @@ import { all, one, run } from "./db";
 import { env } from "./env";
 import { botStartAppLink, gameStartParam } from "./telegram-links";
 import { dictionaries, normaliseLocale, type Locale } from "./i18n/shared";
-import { answerCallbackQuery, answerPreCheckoutQuery, sendMessage, sendPhoto } from "./telegram";
+import { answerCallbackQuery, answerPreCheckoutQuery, sendMessage, sendPhoto, type TelegramUpdate } from "./telegram";
 import { createStarsInvoice, fulfilStarsPayment, listPlans } from "./payments";
 import { nowIso } from "./time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type TgUpdate = {
-  update_id: number;
-  message?: {
-    message_id: number;
-    from?: { id: number; first_name?: string; username?: string; language_code?: string };
-    chat: { id: number };
-    text?: string;
-    successful_payment?: {
-      invoice_payload: string;
-      telegram_payment_charge_id: string;
-      total_amount: number;
-      currency: string;
-    };
-  };
-  callback_query?: {
-    id: string;
-    from: { id: number; first_name?: string; username?: string };
-    data?: string;
-    message?: { chat: { id: number } };
-  };
-  pre_checkout_query?: { id: string; from: { id: number }; invoice_payload: string; total_amount: number; currency: string };
-  successful_payment?: never;
-};
 
 const appLink = () => env.appUrl;
 
@@ -243,7 +220,7 @@ async function sendPlanPicker(chatId: number, locale: Locale, user: { id: string
   void user;
 }
 
-export async function handleUpdate(update: TgUpdate): Promise<void> {
+export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   // idempotency
   try {
     await run("INSERT INTO telegram_updates (update_id, processed_at) VALUES (?, ?)", [String(update.update_id), nowIso()]);

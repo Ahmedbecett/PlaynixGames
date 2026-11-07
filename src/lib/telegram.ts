@@ -1,7 +1,22 @@
-import crypto from "node:crypto";
+/**
+ * Telegram integration for the Playnix app.
+ *
+ * The primitives live in `playnix-sdk` (`playnix-sdk/server`), which is the
+ * package published from `sdk/`. This module is the app-side adapter: it reads
+ * configuration from `env`, keeps the historical function names, and maps SDK
+ * errors onto the app's `TelegramError` so callers and HTTP handlers behave
+ * exactly as before.
+ */
+import {
+  TelegramApiError,
+  TelegramBot,
+  TelegramError,
+  validateInitData as validateInitDataWithSdk,
+} from "playnix-sdk/server";
 import { env } from "./env";
 
-const API_BASE = "https://api.telegram.org";
+export { TelegramError };
+export type { TelegramUpdate } from "playnix-sdk/server";
 
 export type TelegramWebAppUser = {
   id: number;
@@ -22,96 +37,57 @@ export type ValidatedInitData = {
   raw: URLSearchParams;
 };
 
-export class TelegramError extends Error {
-  constructor(
-    message: string,
-    readonly code = "telegram_error",
-  ) {
-    super(message);
-  }
-}
-
 /**
  * Validates Telegram Mini App initData per
  * https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
  *
- * secretKey = HMAC_SHA256(key="WebAppData", message=bot_token)
- * hash      = hex(HMAC_SHA256(key=secretKey, message=data_check_string))
+ * The HMAC work (and the timing-safe comparison) is done by the SDK; this
+ * wrapper keeps the `raw: URLSearchParams` shape the app already relies on.
  */
 export function validateInitData(initData: string, maxAgeSeconds = 60 * 60 * 24): ValidatedInitData {
-  const botToken = env.botToken;
-  if (!botToken) throw new TelegramError("Bot token is not configured on the server.", "config");
-
-  const params = new URLSearchParams(initData);
-  const hash = params.get("hash");
-  if (!hash) throw new TelegramError("Missing initData hash.", "invalid");
-
-  const pairs: string[] = [];
-  for (const [key, value] of [...params.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    if (key === "hash" || key === "signature") continue;
-    pairs.push(`${key}=${value}`);
-  }
-  const dataCheckString = pairs.join("\n");
-
-  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const computed = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
-
-  const a = Buffer.from(computed, "utf8");
-  const b = Buffer.from(hash, "utf8");
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    throw new TelegramError("initData signature is invalid.", "invalid");
-  }
-
-  const authDateRaw = Number(params.get("auth_date"));
-  if (!Number.isFinite(authDateRaw) || authDateRaw <= 0) {
-    throw new TelegramError("initData auth_date is missing.", "invalid");
-  }
-  const authDate = new Date(authDateRaw * 1000);
-  if (Date.now() - authDate.getTime() > maxAgeSeconds * 1000) {
-    throw new TelegramError("initData has expired. Reopen the Mini App.", "expired");
-  }
-
-  const userRaw = params.get("user");
-  if (!userRaw) throw new TelegramError("initData has no user payload.", "invalid");
-
-  let user: TelegramWebAppUser;
-  try {
-    user = JSON.parse(userRaw) as TelegramWebAppUser;
-  } catch {
-    throw new TelegramError("initData user payload is not valid JSON.", "invalid");
-  }
-  if (!user?.id || !user.first_name) throw new TelegramError("initData user is incomplete.", "invalid");
-
+  const validated = validateInitDataWithSdk(initData, { botToken: env.botToken, maxAgeSeconds });
   return {
-    user,
-    authDate,
-    queryId: params.get("query_id") ?? undefined,
-    startParam: params.get("start_param") ?? undefined,
-    raw: params,
+    user: validated.user,
+    authDate: validated.authDate,
+    queryId: validated.queryId,
+    startParam: validated.startParam,
+    raw: validated.params,
   };
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export async function callTelegramApi<T = any>(
-  method: string,
-  body?: Record<string, unknown>,
-): Promise<T> {
+let cachedBot: { token: string; bot: TelegramBot } | null = null;
+
+/**
+ * The shared Bot API client. Calls are marked `no-store` so Next never caches a
+ * Telegram response, and the client is rebuilt if the token changes.
+ */
+function bot(): TelegramBot {
   const token = env.botToken;
   if (!token) throw new TelegramError("Bot token is not configured.", "config");
-  const response = await fetch(`${API_BASE}/bot${token}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-    cache: "no-store",
-    signal: AbortSignal.timeout(15_000),
-  });
-  const payload = (await response.json().catch(() => null)) as
-    | { ok: boolean; result?: T; description?: string; error_code?: number }
-    | null;
-  if (!response.ok || !payload?.ok) {
-    throw new TelegramError(payload?.description ?? `Telegram API ${method} failed (${response.status}).`);
+  if (cachedBot?.token !== token) {
+    cachedBot = {
+      token,
+      bot: new TelegramBot({
+        token,
+        fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) as ReturnType<typeof fetch>,
+      }),
+    };
   }
-  return payload.result as T;
+  return cachedBot.bot;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export async function callTelegramApi<T = any>(method: string, body?: Record<string, unknown>): Promise<T> {
+  try {
+    return await bot().call<T>(method, body ?? {});
+  } catch (error) {
+    if (error instanceof TelegramApiError) {
+      throw new TelegramError(
+        error.description || `Telegram API ${method} failed (${error.status}).`,
+      );
+    }
+    throw error;
+  }
 }
 
 export async function getMe() {
@@ -149,6 +125,7 @@ export async function createInvoiceLink(params: {
   description: string;
   payload: string;
   stars: number;
+  /** Stars subscriptions only support 30/31-day periods, so any value maps to 30 days. */
   subscriptionDays?: number;
 }) {
   return callTelegramApi<string>("createInvoiceLink", {
@@ -157,11 +134,7 @@ export async function createInvoiceLink(params: {
     payload: params.payload,
     currency: "XTR",
     prices: [{ label: params.title, amount: params.stars }],
-    ...(params.subscriptionDays
-      ? {
-          subscription_period: 2592000,
-        }
-      : {}),
+    ...(params.subscriptionDays ? { subscription_period: 2592000 } : {}),
   });
 }
 
