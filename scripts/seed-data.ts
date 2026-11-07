@@ -1,0 +1,256 @@
+/**
+ * Catalog seed data.
+ *
+ * Every entry here is a real, working, self-hosted game owned by Playnix
+ * (Playnix Originals) and shipped in this repository under public/games/.
+ * No placeholder titles, no fake ratings, no invented studios.
+ */
+import crypto from "node:crypto";
+
+/** Deterministic UUID derived from a string — keeps re-seeding idempotent. */
+export function stableId(input: string): string {
+  const hex = crypto.createHash("sha1").update(`playnix:${input}`).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+export type SeedCategory = {
+  slug: string;
+  name: string;
+  nameAr: string;
+  nameFr: string;
+  description: string;
+  descriptionAr: string;
+  descriptionFr: string;
+  icon: string;
+  sortOrder: number;
+};
+
+export const categories: SeedCategory[] = [
+  { slug: "action", name: "Action", nameAr: "أكشن", nameFr: "Action", description: "Fast reflexes, constant pressure.", descriptionAr: "سرعة بديهة وضغط مستمر.", descriptionFr: "Réflexes rapides, pression constante.", icon: "⚔️", sortOrder: 1 },
+  { slug: "adventure", name: "Adventure", nameAr: "مغامرات", nameFr: "Aventure", description: "Explore worlds and stories.", descriptionAr: "استكشف عوالم وقصصًا.", descriptionFr: "Explorez des mondes et des histoires.", icon: "🧭", sortOrder: 2 },
+  { slug: "arcade", name: "Arcade", nameAr: "أركيد", nameFr: "Arcade", description: "Classic arcade thrills, one more run.", descriptionAr: "متعة الأركيد الكلاسيكية، جولة أخرى.", descriptionFr: "Le plaisir de l'arcade, une partie de plus.", icon: "👾", sortOrder: 3 },
+  { slug: "racing", name: "Racing", nameAr: "سباقات", nameFr: "Course", description: "Speed, corners and precision.", descriptionAr: "سرعة ومنعطفات ودقة.", descriptionFr: "Vitesse, virages et précision.", icon: "🏎️", sortOrder: 4 },
+  { slug: "sports", name: "Sports", nameAr: "رياضة", nameFr: "Sport", description: "Compete on the digital field.", descriptionAr: "نافس على الملعب الرقمي.", descriptionFr: "Affrontez-vous sur le terrain numérique.", icon: "⚽", sortOrder: 5 },
+  { slug: "puzzle", name: "Puzzle", nameAr: "ألغاز", nameFr: "Puzzle", description: "Think, plan, solve.", descriptionAr: "فكّر، خطّط، حُلّ.", descriptionFr: "Réfléchissez, planifiez, résolvez.", icon: "🧩", sortOrder: 6 },
+  { slug: "strategy", name: "Strategy", nameAr: "استراتيجية", nameFr: "Stratégie", description: "Outthink your opponent.", descriptionAr: "تفوّق على خصمك بالتفكير.", descriptionFr: "Surpassez votre adversaire.", icon: "♟️", sortOrder: 7 },
+  { slug: "simulation", name: "Simulation", nameAr: "محاكاة", nameFr: "Simulation", description: "Build, manage, simulate.", descriptionAr: "ابنِ وأدر وحاكِ.", descriptionFr: "Construisez, gérez, simulez.", icon: "🏗️", sortOrder: 8 },
+  { slug: "rpg", name: "RPG", nameAr: "تقمص أدوار", nameFr: "RPG", description: "Grow a hero, shape a destiny.", descriptionAr: "طوّر بطلًا واصنع مصيرًا.", descriptionFr: "Faites grandir un héros.", icon: "🐉", sortOrder: 9 },
+  { slug: "shooting", name: "Shooting", nameAr: "تصويب", nameFr: "Tir", description: "Aim true and survive.", descriptionAr: "صوّب بدقة وانجُ.", descriptionFr: "Visez juste et survivez.", icon: "🎯", sortOrder: 10 },
+  { slug: "multiplayer", name: "Multiplayer", nameAr: "متعددة اللاعبين", nameFr: "Multijoueur", description: "Play with and against others.", descriptionAr: "العب مع الآخرين وضدّهم.", descriptionFr: "Jouez avec et contre les autres.", icon: "👥", sortOrder: 11 },
+  { slug: "casual", name: "Casual", nameAr: "عابرة", nameFr: "Occasionnel", description: "Easy to pick up, hard to put down.", descriptionAr: "سهلة التعلّم، صعبة التوقف.", descriptionFr: "Facile à prendre en main.", icon: "🎲", sortOrder: 12 },
+  { slug: "educational", name: "Educational", nameAr: "تعليمية", nameFr: "Éducatif", description: "Learn while you play.", descriptionAr: "تعلّم وأنت تلعب.", descriptionFr: "Apprenez en jouant.", icon: "🎓", sortOrder: 13 },
+  { slug: "card-games", name: "Card Games", nameAr: "أوراق اللعب", nameFr: "Jeux de cartes", description: "Deal, bluff, win.", descriptionAr: "وزّع وخادع واربح.", descriptionFr: "Distribuez, bluffez, gagnez.", icon: "🃏", sortOrder: 14 },
+  { slug: "board-games", name: "Board Games", nameAr: "ألعاب اللوح", nameFr: "Jeux de société", description: "Timeless boards, new opponents.", descriptionAr: "ألواح خالدة وخصوم جدد.", descriptionFr: "Plateaux intemporels.", icon: "🎴", sortOrder: 15 },
+  { slug: "classic-games", name: "Classic Games", nameAr: "ألعاب كلاسيكية", nameFr: "Jeux classiques", description: "The originals, rebuilt for mobile.", descriptionAr: "الألعاب الأصلية، أُعيد بناؤها للجوال.", descriptionFr: "Les originaux, repensés pour mobile.", icon: "🕹️", sortOrder: 16 },
+];
+
+export type SeedGame = {
+  slug: string;
+  title: string;
+  categorySlug: string;
+  shortDescription: string;
+  description: string;
+  developer: string;
+  publisher: string;
+  pricing: "free" | "premium";
+  featured: boolean;
+  orientation: "any" | "portrait" | "landscape";
+  controls: string;
+  languages: string;
+  releasedAt: string;
+  coverUrl: string;
+  screenshots: string[];
+  license: string;
+  source: string;
+};
+
+const ORIGINALS_DEV = "Playnix Originals";
+const ORIGINALS_LICENSE = "© Playnix Originals — self-hosted, all rights reserved";
+const ORIGINALS_SOURCE = "In-house build (public/games), shipped with the app";
+
+export const games: SeedGame[] = [
+  {
+    slug: "neon-serpent",
+    title: "Neon Serpent",
+    categorySlug: "arcade",
+    shortDescription: "Grow a glowing serpent, dodge your own tail, chase the high score.",
+    description:
+      "A neon reimagining of the arcade classic. Steer a luminous serpent through a grid of pulsing energy orbs, growing longer with every bite. Three speeds, swipe or keyboard control, and a particle engine that reacts to every turn. Runs entirely in the Mini App — no downloads, no installs.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "free",
+    featured: true,
+    orientation: "any",
+    controls: "Arrow keys / WASD / swipe / on-screen D-pad",
+    languages: "en,ar,fr",
+    releasedAt: "2026-09-18",
+    coverUrl: "/covers/neon-serpent.jpg",
+    screenshots: ["/covers/neon-serpent.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+  {
+    slug: "void-breaker",
+    title: "Void Breaker",
+    categorySlug: "arcade",
+    shortDescription: "Break every brick in a collapsing neon grid before the void closes in.",
+    description:
+      "A brick-breaker built for touch screens: drag the paddle, angle your shots, and clear wave after wave of crystalline blocks. Power-ups change the physics on every wave, and the soundtrack layer builds as your combo chain grows.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "free",
+    featured: false,
+    orientation: "portrait",
+    controls: "Drag / mouse / arrow keys",
+    languages: "en,ar,fr",
+    releasedAt: "2026-09-26",
+    coverUrl: "/covers/void-breaker.jpg",
+    screenshots: ["/covers/void-breaker.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+  {
+    slug: "astro-dodge",
+    title: "Astro Dodge",
+    categorySlug: "action",
+    shortDescription: "Thread a tiny ship through an asteroid storm and blast what you can't dodge.",
+    description:
+      "Endless survival in deep space. Thrust, drift and shoot through escalating asteroid fields, collecting shield fragments between waves. Difficulty ramps smoothly, so a good run always feels earned and a great run feels impossible.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "free",
+    featured: true,
+    orientation: "any",
+    controls: "Arrow keys / WASD to fly, Space or tap to fire",
+    languages: "en,ar,fr",
+    releasedAt: "2026-10-04",
+    coverUrl: "/covers/astro-dodge.jpg",
+    screenshots: ["/covers/astro-dodge.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+  {
+    slug: "block-cascade",
+    title: "Block Cascade",
+    categorySlug: "puzzle",
+    shortDescription: "Stack falling blocks, clear lines and keep the cascade alive.",
+    description:
+      "A modern falling-block puzzle with ghost pieces, hold, soft-drop and a cascade bonus for consecutive clears. Designed for phones first: large touch targets, adjustable speed, and a pause that actually pauses.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "free",
+    featured: false,
+    orientation: "portrait",
+    controls: "Swipe to move, tap to rotate, swipe down to drop",
+    languages: "en,ar,fr",
+    releasedAt: "2026-10-12",
+    coverUrl: "/covers/block-cascade.jpg",
+    screenshots: ["/covers/block-cascade.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+  {
+    slug: "memory-matrix",
+    title: "Memory Matrix",
+    categorySlug: "casual",
+    shortDescription: "Flip, match and remember — a memory game with a neon grid and a timer.",
+    description:
+      "Match pairs on a glowing matrix across three board sizes. Every round tracks your moves and time, rewarding memory over luck. A calm, readable interface that works as well on a tablet as it does on a small phone.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "free",
+    featured: false,
+    orientation: "portrait",
+    controls: "Tap cards",
+    languages: "en,ar,fr",
+    releasedAt: "2026-10-20",
+    coverUrl: "/covers/memory-matrix.jpg",
+    screenshots: ["/covers/memory-matrix.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+  {
+    slug: "reversi-duel",
+    title: "Reversi Duel",
+    categorySlug: "board-games",
+    shortDescription: "The classic disc-flipping duel, with three difficulty levels and a fair AI.",
+    description:
+      "Reversi (Othello) rebuilt for Telegram: place, flank and flip. Three AI levels use minimax with positional weighting — beginner, club and expert. Includes legal-move hints, score tracking and a full undo of your last move.",
+    developer: ORIGINALS_DEV,
+    publisher: "Playnix",
+    pricing: "premium",
+    featured: true,
+    orientation: "any",
+    controls: "Tap a highlighted square",
+    languages: "en,ar,fr",
+    releasedAt: "2026-10-28",
+    coverUrl: "/covers/reversi-duel.jpg",
+    screenshots: ["/covers/reversi-duel.jpg"],
+    license: ORIGINALS_LICENSE,
+    source: ORIGINALS_SOURCE,
+  },
+];
+
+export type SeedPlan = {
+  id: string;
+  name: string;
+  nameAr: string;
+  nameFr: string;
+  description: string;
+  price: number;
+  durationDays: number;
+  features: string[];
+  sortOrder: number;
+};
+
+export const plans: SeedPlan[] = [
+  {
+    id: stableId("plan-monthly"),
+    name: "Premium · 1 month",
+    nameAr: "بريميوم · شهر",
+    nameFr: "Premium · 1 mois",
+    description: "Full Premium collection for 30 days.",
+    price: 250,
+    durationDays: 30,
+    features: ["premium.benefit.library", "premium.benefit.collections", "premium.benefit.ads"],
+    sortOrder: 1,
+  },
+  {
+    id: stableId("plan-quarterly"),
+    name: "Premium · 3 months",
+    nameAr: "بريميوم · 3 أشهر",
+    nameFr: "Premium · 3 mois",
+    description: "Three months of Premium, saving 13%.",
+    price: 650,
+    durationDays: 90,
+    features: ["premium.benefit.library", "premium.benefit.collections", "premium.benefit.ads", "premium.benefit.early"],
+    sortOrder: 2,
+  },
+  {
+    id: stableId("plan-yearly"),
+    name: "Premium · 1 year",
+    nameAr: "بريميوم · سنة",
+    nameFr: "Premium · 1 an",
+    description: "Best value: a full year of Premium.",
+    price: 2000,
+    durationDays: 365,
+    features: ["premium.benefit.library", "premium.benefit.collections", "premium.benefit.ads", "premium.benefit.early", "premium.benefit.support"],
+    sortOrder: 3,
+  },
+];
+
+export const adPlacements = [
+  { key: "home_banner", label: "Homepage banner", enabled: 0 },
+  { key: "game_details", label: "Game details banner", enabled: 0 },
+  { key: "home_promo", label: "Homepage promotional section", enabled: 0 },
+  { key: "search_sponsored", label: "Sponsored search listing", enabled: 0 },
+];
+
+export const settings = [
+  { key: "premium_enabled", value: "true" },
+  { key: "ads_enabled", value: "false" },
+  { key: "maintenance_mode", value: "false" },
+  { key: "support_url", value: "" },
+  { key: "terms_url", value: "" },
+  { key: "privacy_url", value: "" },
+];

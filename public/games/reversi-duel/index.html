@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Reversi Duel</title>
+<style>
+  :root{--bg:#090B14;--card:#171E30;--accent:#FF7A18;--cyan:#22D3EE;--violet:#8B5CF6;--text:#F8FAFC;--muted:#A1AABD}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none}
+  #wrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:14px;gap:12px}
+  .score{display:flex;gap:18px;align-items:center;font-size:13px}
+  .chip{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--card);border:1px solid rgba(139,92,246,.3)}
+  .dot{width:14px;height:14px;border-radius:50%}
+  .dot.black{background:#0b0f18;border:1px solid #22D3EE;box-shadow:0 0 12px rgba(34,211,238,.5)}
+  .dot.white{background:#F8FAFC;box-shadow:0 0 12px rgba(248,250,252,.35)}
+  .levels{display:flex;gap:8px}
+  .levels button{padding:8px 14px;border-radius:999px;border:1px solid rgba(139,92,246,.4);background:transparent;color:var(--muted);font-size:12px;font-weight:600}
+  .levels button.active{background:linear-gradient(135deg,rgba(255,122,24,.22),rgba(139,92,246,.22));border-color:var(--accent);color:var(--text)}
+  #board{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;padding:8px;border-radius:18px;
+    background:linear-gradient(160deg,#111b2c,#0c1220);border:1px solid rgba(139,92,246,.3);
+    box-shadow:0 20px 60px rgba(0,0,0,.55);width:min(94vw,460px);aspect-ratio:1}
+  .cell{position:relative;border:0;border-radius:8px;background:rgba(34,211,238,.05);display:grid;place-items:center;padding:0}
+  .cell:disabled{cursor:default}
+  .cell .disc{width:76%;height:76%;border-radius:50%;transition:transform .22s ease,background .2s ease}
+  .disc.black{background:radial-gradient(circle at 32% 28%,#1c2b45,#0a1020 70%);box-shadow:inset 0 0 0 1px rgba(34,211,238,.65),0 0 14px rgba(34,211,238,.3)}
+  .disc.white{background:radial-gradient(circle at 32% 28%,#ffffff,#cfd8e6 72%);box-shadow:inset 0 0 0 1px rgba(248,250,252,.9),0 0 14px rgba(248,250,252,.3)}
+  .cell.hint::after{content:"";width:26%;height:26%;border-radius:50%;background:rgba(255,122,24,.8);box-shadow:0 0 12px rgba(255,122,24,.7)}
+  .cell.last{outline:2px solid rgba(255,122,24,.55);outline-offset:-2px}
+  #status{font-size:14px;color:var(--muted);text-align:center;min-height:40px;max-width:440px;line-height:1.5}
+  #status strong{color:var(--cyan)}
+  .actions{display:flex;gap:10px;padding-bottom:10px}
+  .actions button{padding:12px 20px;border:0;border-radius:14px;font-weight:700;color:#0b0f18;background:linear-gradient(135deg,var(--accent),#ffb35c)}
+  .actions button.ghost{background:transparent;color:var(--muted);border:1px solid rgba(161,170,189,.35)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="score">
+    <span class="chip"><span class="dot black"></span>You <b id="blackScore">2</b></span>
+    <span class="chip"><span class="dot white"></span>AI <b id="whiteScore">2</b></span>
+  </div>
+  <div class="levels" id="levels">
+    <button data-level="1">Beginner</button>
+    <button data-level="2" class="active">Club</button>
+    <button data-level="3">Expert</button>
+  </div>
+  <div id="board" role="grid" aria-label="Reversi board"></div>
+  <div id="status">Your turn — black moves first. Tap a glowing square.</div>
+  <div class="actions">
+    <button id="newGame">New game</button>
+    <button id="undo" class="ghost">Undo</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const EMPTY = 0, BLACK = 1, WHITE = 2;
+  const boardEl = document.getElementById("board");
+  const statusEl = document.getElementById("status");
+  const blackScoreEl = document.getElementById("blackScore");
+  const whiteScoreEl = document.getElementById("whiteScore");
+  const levelsEl = document.getElementById("levels");
+
+  const DIRS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const WEIGHTS = [
+    [120,-20,20,5,5,20,-20,120],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [20,-5,15,3,3,15,-5,20],
+    [5,-5,3,3,3,3,-5,5],
+    [5,-5,3,3,3,3,-5,5],
+    [20,-5,15,3,3,15,-5,20],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [120,-20,20,5,5,20,-20,120],
+  ];
+
+  let board, turn, level = 2, busy = false, lastMove = null, history = [], gameOver = false;
+
+  function freshBoard() {
+    const b = Array.from({ length: 8 }, () => Array(8).fill(EMPTY));
+    b[3][3] = WHITE; b[4][4] = WHITE; b[3][4] = BLACK; b[4][3] = BLACK;
+    return b;
+  }
+
+  function flipsFor(b, r, c, player) {
+    if (b[r][c] !== EMPTY) return [];
+    const out = [];
+    for (const [dr, dc] of DIRS) {
+      const line = [];
+      let rr = r + dr, cc = c + dc;
+      while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr][cc] === (player === BLACK ? WHITE : BLACK)) {
+        line.push([rr, cc]); rr += dr; cc += dc;
+      }
+      if (line.length && rr >= 0 && rr < 8 && cc >= 0 && cc < 8 && b[rr][cc] === player) out.push(...line);
+    }
+    return out;
+  }
+
+  function legalMoves(b, player) {
+    const moves = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const flips = flipsFor(b, r, c, player);
+      if (flips.length) moves.push({ r, c, flips });
+    }
+    return moves;
+  }
+
+  function applyMove(b, move, player) {
+    b[move.r][move.c] = player;
+    for (const [r, c] of move.flips) b[r][c] = player;
+  }
+
+  function scores(b) {
+    let black = 0, white = 0;
+    for (const row of b) for (const v of row) { if (v === BLACK) black++; else if (v === WHITE) white++; }
+    return { black, white };
+  }
+
+  function render() {
+    boardEl.innerHTML = "";
+    const hints = new Map();
+    if (!busy && turn === BLACK && !gameOver) {
+      for (const move of legalMoves(board, BLACK)) hints.set(`${move.r}-${move.c}`, true);
+    }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const cell = document.createElement("button");
+      cell.className = "cell";
+      cell.type = "button";
+      cell.setAttribute("role", "gridcell");
+      const key = `${r}-${c}`;
+      if (hints.has(key)) cell.classList.add("hint");
+      if (lastMove && lastMove.r === r && lastMove.c === c) cell.classList.add("last");
+      if (board[r][c] !== EMPTY) {
+        const disc = document.createElement("span");
+        disc.className = "disc " + (board[r][c] === BLACK ? "black" : "white");
+        cell.appendChild(disc);
+        cell.setAttribute("aria-label", `${board[r][c] === BLACK ? "Black" : "White"} disc at ${r + 1},${c + 1}`);
+      } else {
+        cell.setAttribute("aria-label", `Empty square ${r + 1},${c + 1}`);
+      }
+      cell.disabled = busy || gameOver || !hints.has(key);
+      cell.addEventListener("click", () => playerMove(r, c));
+      boardEl.appendChild(cell);
+    }
+    const { black, white } = scores(board);
+    blackScoreEl.textContent = String(black);
+    whiteScoreEl.textContent = String(white);
+  }
+
+  function snapshot() {
+    history.push({ board: board.map((row) => [...row]), turn, lastMove });
+    if (history.length > 40) history.shift();
+  }
+
+  function undo() {
+    const previous = history.pop();
+    if (!previous || busy) return;
+    board = previous.board; turn = BLACK; lastMove = previous.lastMove; gameOver = false;
+    statusEl.textContent = "Move undone. Your turn.";
+    render();
+  }
+
+  function setStatus(html) { statusEl.innerHTML = html; }
+
+  function playerMove(r, c) {
+    if (busy || gameOver || turn !== BLACK) return;
+    const move = legalMoves(board, BLACK).find((m) => m.r === r && m.c === c);
+    if (!move) return;
+    snapshot();
+    applyMove(board, move, BLACK);
+    lastMove = { r, c };
+    turn = WHITE;
+    render();
+    if (!afterTurn()) return;
+    busy = true;
+    setStatus("AI is thinking…");
+    setTimeout(() => { aiTurn(); busy = false; }, 320);
+  }
+
+  function aiTurn() {
+    if (gameOver) return;
+    const moves = legalMoves(board, WHITE);
+    if (!moves.length) { turn = BLACK; render(); afterTurn(); return; }
+    const depth = level === 1 ? 1 : level === 2 ? 3 : 4;
+    const choice = chooseMove(board, moves, depth);
+    snapshot();
+    applyMove(board, choice, WHITE);
+    lastMove = { r: choice.r, c: choice.c };
+    turn = BLACK;
+    render();
+    afterTurn();
+  }
+
+  function chooseMove(b, moves, depth) {
+    let best = null, bestScore = -Infinity;
+    for (const move of moves) {
+      const copy = b.map((row) => [...row]);
+      applyMove(copy, move, WHITE);
+      const value = minimax(copy, depth - 1, BLACK, -Infinity, Infinity) + Math.random() * 2;
+      if (value > bestScore) { bestScore = value; best = move; }
+    }
+    return best || moves[0];
+  }
+
+  function evaluate(b) {
+    let score = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      if (b[r][c] === WHITE) score += WEIGHTS[r][c];
+      else if (b[r][c] === BLACK) score -= WEIGHTS[r][c];
+    }
+    const { black, white } = scores(b);
+    return score + (white - black) * 2;
+  }
+
+  function minimax(b, depth, player, alpha, beta) {
+    const blackMoves = legalMoves(b, BLACK).length;
+    const whiteMoves = legalMoves(b, WHITE).length;
+    if (depth === 0 || (blackMoves === 0 && whiteMoves === 0)) return evaluate(b);
+    const moves = legalMoves(b, player);
+    if (moves.length === 0) return minimax(b, depth - 1, player === BLACK ? WHITE : BLACK, alpha, beta);
+    if (player === WHITE) {
+      let best = -Infinity;
+      for (const move of moves) {
+        const copy = b.map((row) => [...row]);
+        applyMove(copy, move, WHITE);
+        best = Math.max(best, minimax(copy, depth - 1, BLACK, alpha, beta));
+        alpha = Math.max(alpha, best);
+        if (beta <= alpha) break;
+      }
+      return best;
+    }
+    let best = Infinity;
+    for (const move of moves) {
+      const copy = b.map((row) => [...row]);
+      applyMove(copy, move, BLACK);
+      best = Math.min(best, minimax(copy, depth - 1, WHITE, alpha, beta));
+      beta = Math.min(beta, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  /** Returns false when the game ended. */
+  function afterTurn() {
+    const blackMoves = legalMoves(board, BLACK);
+    const whiteMoves = legalMoves(board, WHITE);
+    if (!blackMoves.length && !whiteMoves.length) { endGame(); return false; }
+    if (turn === BLACK && !blackMoves.length) {
+      setStatus("You have no legal move — AI plays again.");
+      busy = true;
+      setTimeout(() => { aiTurn(); busy = false; }, 500);
+      return false;
+    }
+    if (turn === WHITE && !whiteMoves.length) {
+      turn = BLACK;
+      render();
+      setStatus("AI has no legal move — your turn again.");
+      return false;
+    }
+    if (turn === BLACK) setStatus("Your turn — tap a glowing square.");
+    return true;
+  }
+
+  function endGame() {
+    gameOver = true;
+    const { black, white } = scores(board);
+    const verdict = black > white ? "You win!" : black === white ? "It's a draw." : "AI wins this one.";
+    setStatus(`<strong>${verdict}</strong> Final score ${black} – ${white}.`);
+    render();
+  }
+
+  function newGame() {
+    board = freshBoard(); turn = BLACK; busy = false; lastMove = null; history = []; gameOver = false;
+    setStatus("Your turn — black moves first. Tap a glowing square.");
+    render();
+  }
+
+  levelsEl.addEventListener("click", (event) => {
+    const value = Number(event.target.getAttribute("data-level"));
+    if (!value) return;
+    level = value;
+    [...levelsEl.children].forEach((btn) => btn.classList.toggle("active", btn === event.target));
+    newGame();
+  });
+  document.getElementById("newGame").addEventListener("click", newGame);
+  document.getElementById("undo").addEventListener("click", undo);
+  window.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "playnix:pause") statusEl.dataset.paused = "1";
+  });
+
+  newGame();
+})();
+</script>
+</body>
+</html>

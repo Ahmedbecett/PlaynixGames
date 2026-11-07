@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Block Cascade</title>
+<style>
+  :root{--bg:#090B14;--card:#171E30;--accent:#FF7A18;--cyan:#22D3EE;--violet:#8B5CF6;--text:#F8FAFC;--muted:#A1AABD}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none}
+  #wrap{position:fixed;inset:0;display:flex;flex-direction:column}
+  header{display:flex;justify-content:space-between;padding:10px 16px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  header b{color:var(--text)}
+  #stage{flex:1;position:relative;display:grid;place-items:center;padding:6px}
+  canvas{touch-action:none;border-radius:14px;box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 50px rgba(0,0,0,.6);background:#0b0f1a}
+  #controls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px 12px 16px}
+  #controls button{padding:14px 0;border:1px solid rgba(139,92,246,.35);background:rgba(23,30,48,.9);color:var(--text);border-radius:12px;font-size:16px}
+  #controls button:active{background:rgba(255,122,24,.25);border-color:var(--accent)}
+  #overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(9,11,20,.85);backdrop-filter:blur(6px)}
+  .panel{max-width:320px;text-align:center;padding:24px 22px;border-radius:22px;background:var(--card);border:1px solid rgba(34,211,238,.25)}
+  .panel h1{margin:0 0 8px;font-size:23px;background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .panel p{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 16px}
+  .panel button{width:100%;padding:13px;border:0;border-radius:14px;font-weight:700;color:#0b0f18;background:linear-gradient(135deg,var(--accent),#ffb35c)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span>Score <b id="score">0</b></span><span>Lines <b id="lines">0</b></span><span>Level <b id="level">1</b></span></header>
+  <div id="stage">
+    <canvas id="game" width="300" height="600"></canvas>
+    <div id="overlay"><div class="panel">
+      <h1>Block Cascade</h1>
+      <p>Swipe to move, tap to rotate, swipe down to drop. Clear lines to keep the stack low.</p>
+      <button id="startBtn">Start stacking</button>
+    </div></div>
+  </div>
+  <div id="controls">
+    <button data-action="left" aria-label="Move left">◀</button>
+    <button data-action="rotate" aria-label="Rotate">⟳</button>
+    <button data-action="right" aria-label="Move right">▶</button>
+    <button data-action="drop" aria-label="Drop">⇩</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const linesEl = document.getElementById("lines");
+  const levelEl = document.getElementById("level");
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+
+  const COLS = 10, ROWS = 20;
+  const SHAPES = {
+    I: { color: "#22D3EE", cells: [[0,0],[1,0],[2,0],[3,0]] },
+    O: { color: "#FF7A18", cells: [[0,0],[1,0],[0,1],[1,1]] },
+    T: { color: "#8B5CF6", cells: [[0,0],[1,0],[2,0],[1,1]] },
+    S: { color: "#22C55E", cells: [[1,0],[2,0],[0,1],[1,1]] },
+    Z: { color: "#EF4444", cells: [[0,0],[1,0],[1,1],[2,1]] },
+    J: { color: "#3B82F6", cells: [[0,0],[0,1],[1,1],[2,1]] },
+    L: { color: "#F59E0B", cells: [[2,0],[0,1],[1,1],[2,1]] },
+  };
+  const KEYS = Object.keys(SHAPES);
+
+  let board, piece, nextPiece, score, lines, level, dropTimer, dropInterval, running, paused, bag, cell, offsetX, cssW;
+
+  function resize() {
+    const stage = canvas.parentElement;
+    const pad = 8;
+    const availH = stage.clientHeight - pad * 2;
+    const availW = stage.clientWidth - pad * 2;
+    const ratio = COLS / ROWS;
+    let height = Math.min(availH, availW / ratio);
+    let width = height * ratio;
+    canvas.style.width = width + "px";
+    canvas.style.height = height + "px";
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.setTransform(canvas.width / COLS, 0, 0, canvas.height / ROWS, 0, 0);
+    cell = 1; cssW = COLS;
+    draw();
+  }
+
+  function emptyBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function takeFromBag() {
+    if (!bag || bag.length === 0) bag = [...KEYS].sort(() => Math.random() - 0.5);
+    const key = bag.pop();
+    return { key, cells: SHAPES[key].cells.map(([x, y]) => ({ x, y })), color: SHAPES[key].color, x: 3, y: 0 };
+  }
+
+  function rotate(p) {
+    // rotate clockwise around the piece bounding box origin
+    return p.cells.map(({ x, y }) => ({ x: -y, y: x }));
+  }
+
+  function collides(pieceX, pieceY, cells) {
+    return cells.some(({ x, y }) => {
+      const bx = pieceX + x, by = pieceY + y;
+      if (bx < 0 || bx >= COLS || by >= ROWS) return true;
+      if (by < 0) return false;
+      return Boolean(board[by][bx]);
+    });
+  }
+
+  function merge() {
+    piece.cells.forEach(({ x, y }) => {
+      const by = piece.y + y, bx = piece.x + x;
+      if (by >= 0) board[by][bx] = piece.color;
+    });
+  }
+
+  function clearLines() {
+    let cleared = 0;
+    for (let y = ROWS - 1; y >= 0; y--) {
+      if (board[y].every((c) => c)) {
+        board.splice(y, 1);
+        board.unshift(Array(COLS).fill(null));
+        cleared++; y++;
+      }
+    }
+    if (cleared > 0) {
+      const table = [0, 100, 300, 500, 800];
+      score += table[Math.min(cleared, 4)] * level;
+      lines += cleared;
+      const nextLevel = Math.floor(lines / 10) + 1;
+      if (nextLevel !== level) { level = nextLevel; dropInterval = Math.max(120, 720 - (level - 1) * 60); }
+      scoreEl.textContent = String(score);
+      linesEl.textContent = String(lines);
+      levelEl.textContent = String(level);
+    }
+  }
+
+  function spawn() {
+    piece = nextPiece || takeFromBag();
+    nextPiece = takeFromBag();
+    if (collides(piece.x, piece.y, piece.cells)) gameOver();
+  }
+
+  function softDrop() {
+    if (!collides(piece.x, piece.y + 1, piece.cells)) { piece.y++; score += 1; scoreEl.textContent = String(score); }
+    else { merge(); clearLines(); spawn(); }
+    dropTimer = 0;
+  }
+
+  function hardDrop() {
+    while (!collides(piece.x, piece.y + 1, piece.cells)) piece.y++;
+    merge(); clearLines(); spawn(); dropTimer = 0;
+  }
+
+  function move(dx) {
+    if (!collides(piece.x + dx, piece.y, piece.cells)) piece.x += dx;
+  }
+
+  function rotatePiece() {
+    const rotated = rotate(piece);
+    for (const kick of [0, 1, -1, 2, -2]) {
+      if (!collides(piece.x + kick, piece.y, rotated)) { piece.cells = rotated; piece.x += kick; return; }
+    }
+  }
+
+  function ghostY() {
+    let y = piece.y;
+    while (!collides(piece.x, y + 1, piece.cells)) y++;
+    return y;
+  }
+
+  function start() {
+    board = emptyBoard(); score = 0; lines = 0; level = 1; dropInterval = 720; dropTimer = 0;
+    bag = []; nextPiece = null;
+    scoreEl.textContent = "0"; linesEl.textContent = "0"; levelEl.textContent = "1";
+    running = true; paused = false;
+    overlay.classList.add("hidden");
+    spawn();
+    last = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function gameOver() {
+    running = false;
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = "Stack overflow";
+    overlay.querySelector("p").textContent = `Score ${score} · ${lines} lines · level ${level}.`;
+    startBtn.textContent = "Try again";
+  }
+
+  function drawBlock(x, y, color, alpha = 1) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    const px = x + 0.06, py = y + 0.06, s = 0.88, r = 0.12;
+    if (ctx.roundRect) ctx.roundRect(px, py, s, s, r); else ctx.rect(px, py, s, s);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function draw() {
+    if (!ctx) return;
+    ctx.clearRect(0, 0, COLS, ROWS);
+    ctx.fillStyle = "#0b0f1a"; ctx.fillRect(0, 0, COLS, ROWS);
+    ctx.strokeStyle = "rgba(139,92,246,.08)"; ctx.lineWidth = 0.02;
+    for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ROWS); ctx.stroke(); }
+    for (let y = 1; y < ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(COLS, y); ctx.stroke(); }
+
+    if (board) board.forEach((row, y) => row.forEach((color, x) => { if (color) drawBlock(x, y, color); }));
+
+    if (piece && running) {
+      const gy = ghostY();
+      piece.cells.forEach(({ x, y }) => {
+        if (gy + y >= 0) { ctx.strokeStyle = "rgba(248,250,252,.22)"; ctx.lineWidth = 0.04; ctx.strokeRect(piece.x + x + 0.12, gy + y + 0.12, 0.76, 0.76); }
+      });
+      piece.cells.forEach(({ x, y }) => { if (piece.y + y >= 0) drawBlock(piece.x + x, piece.y + y, piece.color); });
+    }
+
+    if (paused && running) {
+      ctx.fillStyle = "rgba(9,11,20,.72)"; ctx.fillRect(0, 0, COLS, ROWS);
+      ctx.fillStyle = "#F8FAFC"; ctx.textAlign = "center";
+      ctx.font = `600 ${ROWS / 18}px system-ui,sans-serif`;
+      ctx.fillText("Paused", COLS / 2, ROWS / 2);
+    }
+  }
+
+  let last = 0;
+  function loop(now) {
+    if (!running) { draw(); return; }
+    const dt = now - last; last = now;
+    if (!paused) {
+      dropTimer += dt;
+      if (dropTimer >= dropInterval) { dropTimer = 0; softDrop(); }
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // gestures
+  let startX = 0, startY = 0, lastX = 0, moved = false, downTime = 0;
+  canvas.addEventListener("pointerdown", (e) => {
+    startX = lastX = e.clientX; startY = e.clientY; moved = false; downTime = performance.now();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!running || paused) return;
+    const dx = e.clientX - lastX;
+    const step = canvas.getBoundingClientRect().width / COLS;
+    if (Math.abs(dx) > step) { move(dx > 0 ? 1 : -1); lastX = e.clientX; moved = true; }
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (!running || paused) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!moved && Math.abs(dy) < 12 && performance.now() - downTime < 300) rotatePiece();
+    if (dy > 60 && Math.abs(dy) > Math.abs(dx)) hardDrop();
+  });
+
+  document.getElementById("controls").addEventListener("click", (e) => {
+    const action = e.target.getAttribute("data-action");
+    if (!running || paused || !action) return;
+    if (action === "left") move(-1);
+    if (action === "right") move(1);
+    if (action === "rotate") rotatePiece();
+    if (action === "drop") hardDrop();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); if (!running) return; paused = !paused; draw(); return; }
+    if (!running || paused) return;
+    if (e.code === "ArrowLeft" || e.code === "KeyA") { e.preventDefault(); move(-1); }
+    if (e.code === "ArrowRight" || e.code === "KeyD") { e.preventDefault(); move(1); }
+    if (e.code === "ArrowUp" || e.code === "KeyW") { e.preventDefault(); rotatePiece(); }
+    if (e.code === "ArrowDown" || e.code === "KeyS") { e.preventDefault(); softDrop(); }
+    if (e.code === "Enter") { e.preventDefault(); hardDrop(); }
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { paused = true; draw(); } });
+  window.addEventListener("message", (e) => {
+    if (e.data && e.data.type === "playnix:pause" && running) { paused = true; draw(); }
+    if (e.data && e.data.type === "playnix:resume" && running) paused = false;
+  });
+  window.addEventListener("resize", resize);
+
+  board = emptyBoard(); running = false; resize(); draw();
+  startBtn.addEventListener("click", start);
+})();
+</script>
+</body>
+</html>

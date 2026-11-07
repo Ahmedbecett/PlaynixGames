@@ -1,0 +1,42 @@
+{
+  "name": "playnix",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playnix \u2014 Telegram gaming search engine & instant-play Mini App",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "prebuild": "tsx --env-file-if-exists=.env.local scripts/ensure-db.ts",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3000",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.ts",
+    "db:seed": "tsx --env-file-if-exists=.env.local scripts/db-seed.ts",
+    "db:reset": "tsx --env-file-if-exists=.env.local scripts/db-reset.ts",
+    "bot:poll": "tsx --env-file-if-exists=.env.local scripts/bot-poll.ts",
+    "bot:webhook": "tsx --env-file-if-exists=.env.local scripts/set-webhook.ts",
+    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-test.ts",
+    "logo:png": "node scripts/logo-png.mjs",
+    "verify:games": "tsx --env-file-if-exists=.env.local scripts/verify-games.ts"
+  },
+  "dependencies": {
+    "next": "15.5.29",
+    "pg": "8.16.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "22.18.12",
+    "@types/pg": "8.15.6",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "sharp": "0.34.4",
+    "tailwindcss": "4.1.17",
+    "tsx": "^4.20.6",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}
