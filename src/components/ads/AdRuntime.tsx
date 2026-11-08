@@ -6,14 +6,17 @@ import { adsPublicConfig } from "@/lib/ads-shared";
 import { startAutoAd } from "./monetag";
 
 const LAST_SHOWN_KEY = "playnix:ads:last";
+const PLAYER_KEY = "playnix:ads:player";
 
 /**
  * Live ads: the page opens and an ad appears on its own — no button, no link.
  *
  * Rules that keep this from becoming hostile:
- *   - never inside the player (`/play/*`) — an ad over a running game reads as a
- *     bug and would be worse than no ad at all;
+ *   - everywhere the public can reach, signed in or not — the entry screen is the
+ *     most valuable impression and needs no account;
  *   - never in `/admin`;
+ *   - inside the player (`/play/*`) at most once per session: an ad on the way in
+ *     is fine, an ad over a running game is not;
  *   - never for subscribers (admins keep seeing them so the setup is verifiable);
  *   - at most one attempt per `NEXT_PUBLIC_ADS_INAPP_INTERVAL` seconds per session,
  *     on top of the frequency/capping the provider applies itself;
@@ -27,18 +30,21 @@ export function AdRuntime({ premium, admin = false }: { premium: boolean; admin?
     const config = adsPublicConfig();
     if (!config.enabled || !config.inApp.enabled) return;
     if (premium && !admin) return;
-    if (pathname?.startsWith("/play/") || pathname?.startsWith("/admin")) return;
+    if (pathname?.startsWith("/admin")) return;
+    const inPlayer = Boolean(pathname?.startsWith("/play/"));
+    if (inPlayer && window.sessionStorage.getItem(PLAYER_KEY) === "1") return;
 
     let cancelled = false;
     let retryAttached = false;
 
     const intervalMs = Math.max(5, config.inApp.intervalSeconds) * 1000;
     const last = Number(window.sessionStorage.getItem(LAST_SHOWN_KEY) ?? 0) || 0;
-    const wait = Math.max(700, intervalMs - (Date.now() - last));
+    const wait = Math.max(400, intervalMs - (Date.now() - last));
 
     async function attempt() {
       if (cancelled) return;
       window.sessionStorage.setItem(LAST_SHOWN_KEY, String(Date.now()));
+      if (inPlayer) window.sessionStorage.setItem(PLAYER_KEY, "1");
       const result = await startAutoAd(config);
       if (cancelled || result.shown || retryAttached) return;
       retryAttached = true;
@@ -52,7 +58,7 @@ export function AdRuntime({ premium, admin = false }: { premium: boolean; admin?
 
     // Long waits must not stack up on navigation: cap the delay so a page the
     // user is actually looking at gets its ad soon after paint.
-    const timer = window.setTimeout(() => void attempt(), Math.min(wait, 6000));
+    const timer = window.setTimeout(() => void attempt(), Math.min(wait, 5000));
 
     return () => {
       cancelled = true;

@@ -29,7 +29,10 @@ fullscreen `show_<zone>()` for zones that only serve that format.
 
 Guard rails, because unrequested ads get hostile fast:
 
-- never inside `/play/*` (an ad over a running game reads as a bug) or `/admin/*`;
+- **every public surface, signed in or not** — the entry screen needs no account,
+  so anonymous visitors are monetised too;
+- never in `/admin/*`; inside the player (`/play/*`) at most once per session —
+  an ad on the way in is fine, an ad over a running game is not;
 - never for subscribers — **except admins**, who keep seeing ads so the setup can
   be verified from the owner's own Telegram account;
 - at most one attempt per `NEXT_PUBLIC_ADS_INAPP_INTERVAL` (30 s) per session, on
@@ -42,7 +45,8 @@ Guard rails, because unrequested ads get hostile fast:
 > (production + preview on Vercel), rewarded policy `20 min / 3 per 24 h / 45 s`,
 > live-ad cadence `frequency 1 · everyPage · 30 s interval`.
 > Flipping any of these requires a redeploy: `NEXT_PUBLIC_*` is inlined at build
-> time. To disable everything instantly, delete `NEXT_PUBLIC_ADS_ZONE_ID` — a
+> time. `<body data-ads="on|off">` tells you what the visitor's build resolved to.
+> To disable everything instantly, delete `NEXT_PUBLIC_ADS_ZONE_ID` — a
 > missing/invalid zone turns ads off *and* removes the ad hosts from the CSP.
 
 ## Configuration
