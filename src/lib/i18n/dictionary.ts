@@ -50,8 +50,8 @@ export const en = {
   "nav.profile": "Profile",
   "home.greeting": "Welcome back",
   "home.heroEyebrow": "Instant play · no installs",
-  "home.heroTitle": "Thousands of games. One tap to play.",
-  "home.heroSubtitle": "Search the Playnix catalog and launch compatible games right inside Telegram.",
+  "home.heroTitle": "Play instantly inside Telegram.",
+  "home.heroSubtitle": "A verified catalog of original games. Search, tap, play — no installs.",
   "home.heroCta": "Explore games",
   "home.searchPlaceholder": "Search games, genres, developers…",
   "home.trending": "Trending now",
@@ -67,6 +67,10 @@ export const en = {
   "home.stat.games": "Games",
   "home.stat.categories": "Categories",
   "home.stat.reviews": "Reviews",
+  "home.topRated": "Top rated",
+  "home.editorsPicks": "Editor's picks",
+  "home.multiplayer": "Multiplayer",
+  "home.plays": "plays",
   "search.title": "Search",
   "search.placeholder": "Search by name, category, developer or tag",
   "search.recent": "Recent searches",
@@ -350,6 +354,8 @@ export const en = {
   "footer.terms": "Terms",
   "footer.privacy": "Privacy",
   "footer.support": "Support",
+  "footer.about": "About",
+  "footer.telegram": "Telegram",
 } as const;
 
 export type DictKey = keyof typeof en;
@@ -400,8 +406,8 @@ export const ar: Record<DictKey, string> = {
   "nav.profile": "حسابي",
   "home.greeting": "أهلًا بعودتك",
   "home.heroEyebrow": "لعب فوري · بدون تحميل",
-  "home.heroTitle": "آلاف الألعاب. بضغطة واحدة.",
-  "home.heroSubtitle": "ابحث في مكتبة بلاينكس وابدأ الألعاب المتوافقة مباشرة داخل تيليجرام.",
+  "home.heroTitle": "العب فورًا داخل تيليجرام.",
+  "home.heroSubtitle": "مكتبة ألعاب أصلية موثّقة. ابحث، اضغط، العب — دون تحميل.",
   "home.heroCta": "استكشف الألعاب",
   "home.searchPlaceholder": "ابحث عن لعبة أو نوع أو مطوّر…",
   "home.trending": "الأكثر رواجًا",
@@ -417,6 +423,10 @@ export const ar: Record<DictKey, string> = {
   "home.stat.games": "لعبة",
   "home.stat.categories": "فئة",
   "home.stat.reviews": "تقييم",
+  "home.topRated": "الأعلى تقييمًا",
+  "home.editorsPicks": "اختيارات المحرر",
+  "home.multiplayer": "متعددة اللاعبين",
+  "home.plays": "لعبات",
   "search.title": "البحث",
   "search.placeholder": "ابحث بالاسم أو الفئة أو المطوّر أو الوسم",
   "search.recent": "عمليات البحث الأخيرة",
@@ -700,6 +710,8 @@ export const ar: Record<DictKey, string> = {
   "footer.terms": "الشروط",
   "footer.privacy": "الخصوصية",
   "footer.support": "الدعم",
+  "footer.about": "حول المنصة",
+  "footer.telegram": "تيليجرام",
 };
 
 export const fr: Record<DictKey, string> = {
@@ -748,8 +760,8 @@ export const fr: Record<DictKey, string> = {
   "nav.profile": "Profil",
   "home.greeting": "Bon retour",
   "home.heroEyebrow": "Jeu instantané · sans installation",
-  "home.heroTitle": "Des milliers de jeux. Un geste pour jouer.",
-  "home.heroSubtitle": "Cherchez dans le catalogue Playnix et lancez des jeux compatibles directement dans Telegram.",
+  "home.heroTitle": "Jouez instantanément dans Telegram.",
+  "home.heroSubtitle": "Un catalogue vérifié de jeux originaux. Cherchez, touchez, jouez — sans installation.",
   "home.heroCta": "Explorer les jeux",
   "home.searchPlaceholder": "Rechercher un jeu, un genre, un développeur…",
   "home.trending": "Tendances",
@@ -765,6 +777,10 @@ export const fr: Record<DictKey, string> = {
   "home.stat.games": "Jeux",
   "home.stat.categories": "Catégories",
   "home.stat.reviews": "Avis",
+  "home.topRated": "Mieux notés",
+  "home.editorsPicks": "Choix de la rédaction",
+  "home.multiplayer": "Multijoueur",
+  "home.plays": "parties",
   "search.title": "Recherche",
   "search.placeholder": "Nom, catégorie, développeur ou tag",
   "search.recent": "Recherches récentes",
@@ -1048,6 +1064,8 @@ export const fr: Record<DictKey, string> = {
   "footer.terms": "Conditions",
   "footer.privacy": "Confidentialité",
   "footer.support": "Support",
+  "footer.about": "À propos",
+  "footer.telegram": "Telegram",
 };
 
 export const dictionaries = { en, ar, fr } as const;

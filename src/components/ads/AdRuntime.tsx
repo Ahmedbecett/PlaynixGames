@@ -32,6 +32,7 @@ export function AdRuntime({ premium, admin = false }: { premium: boolean; admin?
     if (premium && !admin) return;
     if (pathname?.startsWith("/admin")) return;
     if (pathname === "/privacy" || pathname?.startsWith("/privacy/")) return;
+    if (pathname === "/terms" || pathname === "/about") return;
     const inPlayer = Boolean(pathname?.startsWith("/play/"));
     if (inPlayer && window.sessionStorage.getItem(PLAYER_KEY) === "1") return;
 

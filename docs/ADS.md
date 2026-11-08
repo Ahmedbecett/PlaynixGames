@@ -31,7 +31,7 @@ Guard rails, because unrequested ads get hostile fast:
 
 - **every public surface, signed in or not** — the entry screen needs no account,
   so anonymous visitors are monetised too;
-- never in `/admin/*` or `/privacy`; inside the player (`/play/*`) at most once per session —
+- never in `/admin/*`, `/privacy`, `/terms` or `/about`; inside the player (`/play/*`) at most once per session —
   an ad on the way in is fine, an ad over a running game is not;
 - never for subscribers — **except admins**, who keep seeing ads so the setup can
   be verified from the owner's own Telegram account;
