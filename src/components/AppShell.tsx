@@ -107,7 +107,18 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         <div className="divider mb-3" />
         <p className="mb-1">{t("footer.legal")}</p>
         <p>
-          © {new Date().getFullYear()} Playnix · {isAdmin(user) && <Link href="/admin" className="underline">{t("profile.adminPanel")}</Link>}
+          © {new Date().getFullYear()} Playnix ·{" "}
+          <Link href="/privacy" className="underline">
+            {t("footer.privacy")}
+          </Link>
+          {isAdmin(user) && (
+            <>
+              {" · "}
+              <Link href="/admin" className="underline">
+                {t("profile.adminPanel")}
+              </Link>
+            </>
+          )}
         </p>
       </footer>
 

@@ -32,8 +32,9 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
 1. `/setname` → **Playnix**
 2. `/setdescription` → *Search, discover and play instantly inside Telegram.*
 3. `/setabouttext` → *Your game search engine — thousands of games, instant play.*
-4. `/setuserpic` → upload `public/brand/icon-512.png` (regenerate with `npm run logo:png`)
-5. `/setcommands`:
+4. `/setprivacy` → `https://playnix-ashen.vercel.app/privacy`
+5. `/setuserpic` → upload `public/brand/telegram-avatar.png`
+6. `/setcommands`:
    ```
    start - Open Playnix
    games - Browse categories
@@ -45,7 +46,7 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
    help - Help
    language - Change language
    ```
-6. `/setjoingroups` → **Disable** (a Mini App bot has no reason to sit in groups).
+7. `/setjoingroups` → **Disable** (a Mini App bot has no reason to sit in groups).
 
 ## 2b. Subscription funnel and welcome picture
 

@@ -31,6 +31,7 @@ export function AdRuntime({ premium, admin = false }: { premium: boolean; admin?
     if (!config.enabled || !config.inApp.enabled) return;
     if (premium && !admin) return;
     if (pathname?.startsWith("/admin")) return;
+    if (pathname === "/privacy" || pathname?.startsWith("/privacy/")) return;
     const inPlayer = Boolean(pathname?.startsWith("/play/"));
     if (inPlayer && window.sessionStorage.getItem(PLAYER_KEY) === "1") return;
 
