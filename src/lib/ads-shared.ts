@@ -16,7 +16,7 @@ export type AdsPublicConfig = {
   sdkUrl: string;
   /** Use the rewarded popup format as a fallback when the interstitial errors. */
   popupFallback: boolean;
-  /** Automatic in-app interstitials (off unless explicitly enabled). */
+  /** Automatic (no-click) ads: the page opens and an ad appears over it. */
   inApp: {
     enabled: boolean;
     frequency: number;
@@ -91,11 +91,11 @@ export function adsConfigFrom(overrides: PublicEnvOverrides = {}): AdsPublicConf
     popupFallback: flag(source, "NEXT_PUBLIC_ADS_POPUP_FALLBACK", true),
     inApp: {
       enabled: flag(source, "NEXT_PUBLIC_ADS_INAPP_ENABLED", false),
-      frequency: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_FREQUENCY", 2),
+      frequency: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_FREQUENCY", 1),
       cappingHours: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_CAPPING_HOURS", 0.1),
       intervalSeconds: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_INTERVAL", 30),
       timeoutSeconds: numberFrom(source, "NEXT_PUBLIC_ADS_INAPP_TIMEOUT", 5),
-      everyPage: flag(source, "NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE", false),
+      everyPage: flag(source, "NEXT_PUBLIC_ADS_INAPP_EVERY_PAGE", true),
     },
   };
 }

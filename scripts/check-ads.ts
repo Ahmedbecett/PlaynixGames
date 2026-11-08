@@ -58,11 +58,11 @@ async function main() {
   check(
     "in-app settings defaults",
     configured.inApp.enabled === false &&
-      configured.inApp.frequency === 2 &&
+      configured.inApp.frequency === 1 &&
       configured.inApp.cappingHours === 0.1 &&
       configured.inApp.intervalSeconds === 30 &&
       configured.inApp.timeoutSeconds === 5 &&
-      configured.inApp.everyPage === false,
+      configured.inApp.everyPage === true,
     JSON.stringify(configured.inApp),
   );
   check("popup fallback on by default", configured.popupFallback === true);
@@ -232,12 +232,48 @@ async function main() {
     "in-app interstitial sends frequency/capping/interval/timeout/everyPage",
     started === true &&
       payload?.type === "inApp" &&
-      payload.inAppSettings?.frequency === 2 &&
-      payload.inAppSettings?.capping === 0.1 &&
-      payload.inAppSettings?.interval === 30 &&
-      payload.inAppSettings?.timeout === 5 &&
-      payload.inAppSettings?.everyPage === false,
+      payload.inAppSettings?.frequency === config.inApp.frequency &&
+      payload.inAppSettings?.capping === config.inApp.cappingHours &&
+      payload.inAppSettings?.interval === config.inApp.intervalSeconds &&
+      payload.inAppSettings?.timeout === config.inApp.timeoutSeconds &&
+      payload.inAppSettings?.everyPage === config.inApp.everyPage,
     JSON.stringify(payload?.inAppSettings),
+  );
+
+  // Live (no-click) ads: in-app first, plain interstitial as the fallback.
+  calls.length = 0;
+  (dom.window as unknown as Record<string, unknown>).show_12207042 = (format?: unknown) => {
+    calls.push({ format });
+    return Promise.resolve(true);
+  };
+  const autoInApp = await monetag.startAutoAd({ ...config, inApp: { ...config.inApp, enabled: true } });
+  check(
+    "auto ad uses the in-app interstitial first",
+    autoInApp.shown === true && autoInApp.format === "inApp" &&
+      (calls[0]?.format as { type?: string } | undefined)?.type === "inApp",
+  );
+
+  calls.length = 0;
+  (dom.window as unknown as Record<string, unknown>).show_12207042 = (format?: unknown) => {
+    calls.push({ format });
+    if (format && typeof format === "object") return Promise.reject(new Error("no inApp for this zone"));
+    return Promise.resolve(true);
+  };
+  const autoPlain = await monetag.startAutoAd(config);
+  check(
+    "auto ad falls back to the fullscreen interstitial",
+    autoPlain.shown === true && autoPlain.format === "interstitial" && calls.length === 2,
+    calls.map((c) => (typeof c.format === "object" ? "inApp" : "plain")).join(" → "),
+  );
+
+  (dom.window as unknown as Record<string, unknown>).show_12207042 = () => Promise.reject(new Error("no fill"));
+  const autoFailed = await monetag.startAutoAd(config);
+  check("auto ad reports failure instead of throwing", autoFailed.shown === false);
+
+  const monetagSource = fs.readFileSync(path.join(process.cwd(), "src", "components", "ads", "monetag.ts"), "utf8");
+  check(
+    "SDK tag carries data-zone/data-sdk (Monetag in-app requires it)",
+    monetagSource.includes("dataset.zone") && monetagSource.includes("dataset.sdk"),
   );
 
   const blockedInJsdom = await (async () => {

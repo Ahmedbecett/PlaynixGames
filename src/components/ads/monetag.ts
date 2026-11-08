@@ -34,7 +34,8 @@ export function loadAdSdk(config: AdsPublicConfig, timeoutMs = 8000): Promise<vo
   if (!config.enabled || !config.zoneId) return Promise.reject(new AdUnavailableError("unsupported"));
   if (sdkLoader) return sdkLoader;
 
-  const globalName = monetagFunctionName(config.zoneId);
+  const zoneId = config.zoneId;
+  const globalName = monetagFunctionName(zoneId);
 
   sdkLoader = new Promise<void>((resolve, reject) => {
     if (typeof (window as unknown as Record<string, unknown>)[globalName] === "function") {
@@ -67,6 +68,10 @@ export function loadAdSdk(config: AdsPublicConfig, timeoutMs = 8000): Promise<vo
     script.src = config.sdkUrl;
     script.async = true;
     script.dataset.playnixAds = "1";
+    // Monetag's in-app SDK reads the zone from the tag itself; without these the
+    // `show_<zone>` global can stay undefined even when the script loads.
+    script.dataset.zone = zoneId;
+    script.dataset.sdk = globalName;
     script.addEventListener("load", () => finish(), { once: true });
     script.addEventListener("error", () => finish(new AdUnavailableError("blocked")), { once: true });
     document.head.appendChild(script);
@@ -156,5 +161,64 @@ export async function startInAppInterstitial(config: AdsPublicConfig): Promise<b
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Result of an automatic (no-click) ad attempt. */
+export type AutoAdResult =
+  | { shown: true; format: "inApp" | "interstitial" }
+  | { shown: false; reason: "disabled" | "busy" | "sdk" | "blocked" | "unsupported" };
+
+/**
+ * Show an ad **without any user gesture** — the "live" behaviour: the page opens
+ * and an ad appears over it, no link and no button.
+ *
+ * Order matters: the in-app interstitial is the format Monetag wants for this
+ * (it owns frequency/capping), and a plain `show_<zone>()` is the fallback for
+ * zones that only serve the fullscreen interstitial. The promise is raced with a
+ * short timeout because we do not need the completion signal here — a rejected or
+ * slow provider must never hold the UI.
+ */
+export async function startAutoAd(config: AdsPublicConfig): Promise<AutoAdResult> {
+  if (!config.enabled || !config.zoneId) return { shown: false, reason: "disabled" };
+  if (inFlight) return { shown: false, reason: "busy" };
+
+  inFlight = true;
+  try {
+    await loadAdSdk(config);
+    const fn = zoneFunction(config.zoneId);
+
+    try {
+      await withTimeout(
+        Promise.resolve(
+          fn({
+            type: "inApp",
+            inAppSettings: {
+              frequency: config.inApp.frequency,
+              capping: config.inApp.cappingHours,
+              interval: config.inApp.intervalSeconds,
+              timeout: config.inApp.timeoutSeconds,
+              everyPage: config.inApp.everyPage,
+            },
+          }),
+        ),
+        20_000,
+      );
+      return { shown: true, format: "inApp" };
+    } catch {
+      /* fall through to the plain interstitial */
+    }
+
+    try {
+      await withTimeout(Promise.resolve(fn()), 20_000);
+      return { shown: true, format: "interstitial" };
+    } catch {
+      return { shown: false, reason: "unsupported" };
+    }
+  } catch (error) {
+    const reason = error instanceof AdUnavailableError ? error.reason : "sdk";
+    return { shown: false, reason: reason === "timeout" ? "blocked" : reason };
+  } finally {
+    inFlight = false;
   }
 }

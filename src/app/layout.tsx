@@ -38,6 +38,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const { locale, dict, dir } = await getDictionary();
   const user = await getCurrentUser();
   const premium = user ? (await getPremiumStatus()).premium : false;
+  // Admins keep seeing live ads even with an active subscription, otherwise the
+  // ad setup can never be verified from the owner's own Telegram account.
+  const admin = user?.role === "admin";
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
@@ -46,7 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <LocaleProvider locale={locale} dict={dict}>
           <ToastProvider>
             <TelegramBridge authenticated={Boolean(user)}>
-              <AdRuntime premium={premium} />
+              <AdRuntime premium={premium} admin={admin} />
               {children}
             </TelegramBridge>
           </ToastProvider>

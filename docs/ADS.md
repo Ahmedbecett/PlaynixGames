@@ -22,14 +22,25 @@ Playnix monetises in three layers; this document covers the middle one.
 5. The player page and `POST /api/games/:id/play` both check the pass — the client
    is never the authority.
 
-The third format, the **automatic in-app interstitial**, is implemented and
-**off by default** in code (`NEXT_PUBLIC_ADS_INAPP_ENABLED=true` to enable). It
-never runs inside `/play/*` or `/admin/*`, never runs for premium members, and is
-started once per browser session.
+The third format is the **live ad**: the page opens and an ad appears on its own
+— no button, no link (`NEXT_PUBLIC_ADS_INAPP_ENABLED=true`, **on in production**).
+`startAutoAd()` calls the in-app interstitial first and falls back to a plain
+fullscreen `show_<zone>()` for zones that only serve that format.
+
+Guard rails, because unrequested ads get hostile fast:
+
+- never inside `/play/*` (an ad over a running game reads as a bug) or `/admin/*`;
+- never for subscribers — **except admins**, who keep seeing ads so the setup can
+  be verified from the owner's own Telegram account;
+- at most one attempt per `NEXT_PUBLIC_ADS_INAPP_INTERVAL` (30 s) per session, on
+  top of the frequency/capping the provider applies itself;
+- if the webview refuses an ad without a gesture, it retries exactly once on the
+  first tap anywhere.
 
 > **Current production state (2026-11-07):** `NEXT_PUBLIC_ADS_ENABLED=true`,
 > `NEXT_PUBLIC_ADS_ZONE_ID=12207042`, `NEXT_PUBLIC_ADS_INAPP_ENABLED=true`
-> (production + preview on Vercel), policy `20 min / 3 per 24 h / 45 s`.
+> (production + preview on Vercel), rewarded policy `20 min / 3 per 24 h / 45 s`,
+> live-ad cadence `frequency 1 · everyPage · 30 s interval`.
 > Flipping any of these requires a redeploy: `NEXT_PUBLIC_*` is inlined at build
 > time. To disable everything instantly, delete `NEXT_PUBLIC_ADS_ZONE_ID` — a
 > missing/invalid zone turns ads off *and* removes the ad hosts from the CSP.
