@@ -406,3 +406,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cloud_saves_unique ON cloud_saves(user_id,
 --   games.developer_id     owner of a community-submitted game
 --   games.review_note      moderator feedback shown to the developer
 --   games.submitted_at     when the developer sent it for review
+
+-- Binary images uploaded by developers when no object store is configured.
+-- Vercel's filesystem is read-only, so `public/uploads` only works locally.
+-- In production the re-encoded bytes live here and are served by /api/media/<id>.
+CREATE TABLE IF NOT EXISTS media_assets (
+  id           TEXT PRIMARY KEY,
+  key          TEXT NOT NULL UNIQUE,
+  content_type TEXT NOT NULL,
+  bytes        INTEGER NOT NULL,
+  width        INTEGER NOT NULL,
+  height       INTEGER NOT NULL,
+  data         TEXT NOT NULL,
+  created_at   TEXT NOT NULL
+);

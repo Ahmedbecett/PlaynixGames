@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { env } from "./env";
+import { run } from "./db";
+import { nowIso } from "./time";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
@@ -115,8 +117,33 @@ export async function storeImage(file: File, prefix = "games"): Promise<StoredIm
     return { url, width, height, bytes: output.byteLength };
   }
 
-  const target = path.join(process.cwd(), "public", "uploads", key);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(target, output);
-  return { url: `/uploads/${key}`, width, height, bytes: output.byteLength };
+  // Locally, write to public/ so the file is served by Next's static handler.
+  // On a read-only filesystem (Vercel) that write throws, so fall back to the
+  // database and serve the bytes from /api/media/<id>.
+  const filename = path.basename(key);
+  try {
+    const target = path.join(process.cwd(), "public", "uploads", key);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, output);
+    return { url: `/uploads/${key}`, width, height, bytes: output.byteLength };
+  } catch {
+    const id = crypto.randomUUID();
+    await run(
+      `INSERT INTO media_assets (id, key, content_type, bytes, width, height, data, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, key, contentType, output.byteLength, width, height, output.toString("base64"), nowIso()],
+    );
+    return { url: `/api/media/${id}/${filename}`, width, height, bytes: output.byteLength };
+  }
+}
+
+/** Reads a stored image by id. Returns null when it does not exist. */
+export async function readMedia(id: string): Promise<{ data: Buffer; contentType: string } | null> {
+  const { one } = await import("./db");
+  const row = await one<{ data: string; content_type: string }>(
+    "SELECT data, content_type FROM media_assets WHERE id = ?",
+    [id],
+  );
+  if (!row) return null;
+  return { data: Buffer.from(row.data, "base64"), contentType: row.content_type };
 }
