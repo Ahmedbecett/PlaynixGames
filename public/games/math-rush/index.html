@@ -64,9 +64,19 @@
     </div>
   </div>
 </div>
+<script src="/sdk/playnix-sdk.js"></script>
 <script>
 (() => {
   "use strict";
+
+  // Platform integration is optional: if the SDK file is missing (a game served
+  // outside Playnix), every call below silently does nothing.
+  const playnix = window.Playnix ? window.Playnix.create({ game: "math-rush" }) : null;
+  playnix?.defineAchievements([
+    { key: "first-answer", name: "First Answer", description: "Answer your first question correctly.", points: 5 },
+    { key: "streak-10", name: "On Fire", description: "Get ten correct answers in a row.", points: 25 },
+    { key: "level-5", name: "Quick Thinker", description: "Reach level 5 in a single run.", points: 40 },
+  ]);
   const el = (id) => document.getElementById(id);
   const BEST_KEY = "playnix.mathrush.best";
 
@@ -147,8 +157,13 @@
     if (option === answer) {
       button.classList.add("ok");
       streak += 1;
+      if (streak === 1) playnix?.unlock("first-answer");
+      if (streak === 10) playnix?.unlock("streak-10");
       score += 10 + streak * 2;
-      if (streak > 0 && streak % 5 === 0) level += 1;
+      if (streak > 0 && streak % 5 === 0) {
+        level += 1;
+        if (level === 5) playnix?.unlock("level-5");
+      }
       timeLeft = Math.min(100, timeLeft + 9);
       if (score > best) {
         best = score;
@@ -181,6 +196,19 @@
       `${reason}. You scored ${score} points, reached level ${level} and answered with a best streak of ${streak}.`;
     overlay.querySelector("button").textContent = "Play again";
     sync();
+
+    // Platform: leaderboard, achievements and a cloud save of the best run.
+    if (playnix && score > 0) {
+      playnix.score(score);
+      playnix
+        .load()
+        .then((result) => {
+          const saved = result && result.save ? result.save.payload : null;
+          const bestScore = saved && typeof saved.bestScore === "number" ? saved.bestScore : 0;
+          if (score > bestScore) playnix.saveLocalFirst({ bestScore, bestLevel: level });
+        })
+        .catch(() => undefined);
+    }
   }
 
   function start() {

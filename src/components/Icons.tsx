@@ -38,6 +38,8 @@ const paths: Record<string, string> = {
   bolt: "M13 2 4 14h6l-1 8 9-12h-6z",
   telegram: "M21.9 4.3 18.6 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1L18 6.4c.4-.4-.1-.6-.6-.2L6.4 13l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6L20.5 2.4c.9-.3 1.6.2 1.4 1.9z",
   pause: "M8 5v14M16 5v14",
+  code: "M8 6 2 12l6 6M16 6l6 6-6 6",
+  layers: "M12 3 3 8l9 5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5",
 };
 
 export type IconName = keyof typeof paths;

@@ -252,6 +252,7 @@ export const en = {
   "admin.title": "Administration",
   "admin.nav.dashboard": "Dashboard",
   "admin.nav.games": "Games",
+  "admin.nav.developers": "Developers",
   "admin.nav.categories": "Categories",
   "admin.nav.users": "Users",
   "admin.nav.reviews": "Reviews",
@@ -369,6 +370,14 @@ export const en = {
 } as const;
 
 export type DictKey = keyof typeof en;
+
+/**
+ * A locale dictionary. English is the source of truth and must be complete;
+ * every other locale may translate a subset. Missing keys fall back to English
+ * in `getDictionaryFor`, so a half-finished translation degrades to readable
+ * English instead of showing a raw key or failing the build.
+ */
+export type PartialDict = Partial<Record<DictKey, string>>;
 
 export const ar: Record<DictKey, string> = {
   "brand.name": "بلاينكس",
@@ -618,6 +627,7 @@ export const ar: Record<DictKey, string> = {
   "admin.title": "الإدارة",
   "admin.nav.dashboard": "لوحة التحكم",
   "admin.nav.games": "الألعاب",
+  "admin.nav.developers": "المطورون",
   "admin.nav.categories": "الفئات",
   "admin.nav.users": "المستخدمون",
   "admin.nav.reviews": "المراجعات",
@@ -982,6 +992,7 @@ export const fr: Record<DictKey, string> = {
   "admin.title": "Administration",
   "admin.nav.dashboard": "Tableau de bord",
   "admin.nav.games": "Jeux",
+  "admin.nav.developers": "Développeurs",
   "admin.nav.categories": "Catégories",
   "admin.nav.users": "Utilisateurs",
   "admin.nav.reviews": "Avis",
@@ -1098,7 +1109,89 @@ export const fr: Record<DictKey, string> = {
   "footer.telegram": "Telegram",
 };
 
-export const dictionaries = { en, ar, fr } as const;
+/* --------------------------------------------------------------------------
+ * Spanish and Russian
+ *
+ * Russian matters most for Telegram's audience; Spanish is the largest
+ * untapped consumer market. Both are partial on purpose — see PartialDict.
+ * Translating the remaining keys is a good first contribution: add entries
+ * below, and `npm run i18n:coverage` reports what is still missing.
+ * ------------------------------------------------------------------------ */
+
+export const es: PartialDict = {
+  "brand.name": "Playnix",
+  "brand.tagline": "Busca. Descubre. Juega al instante.",
+  "common.play": "Jugar",
+  "common.playNow": "Jugar ahora",
+  "common.search": "Buscar",
+  "common.viewAll": "Ver todo",
+  "common.loading": "Cargando…",
+  "common.error": "Algo salió mal",
+  "common.retry": "Reintentar",
+  "common.cancel": "Cancelar",
+  "common.save": "Guardar",
+  "common.saved": "Guardado",
+  "common.delete": "Eliminar",
+  "common.close": "Cerrar",
+  "common.back": "Atrás",
+  "common.free": "Gratis",
+  "common.premium": "Premium",
+  "common.language": "Idioma",
+  "nav.home": "Inicio",
+  "nav.categories": "Categorías",
+  "nav.search": "Buscar",
+  "nav.favorites": "Favoritos",
+  "nav.profile": "Perfil",
+  "telegram.ctaTitle": "Juega dentro de Telegram",
+  "telegram.ctaBody": "Abre el bot una vez y cada juego empieza al instante — sin descargas ni instalaciones.",
+  "telegram.ctaButton": "Abrir el bot de Telegram",
+  "telegram.ctaHint": "Gratis · Funciona en cualquier teléfono",
+  "telegram.bannerBody": "Juego instantáneo, favoritos y Premium dentro de Telegram.",
+  "reviews.ctaTitle": "Puntúa este juego",
+  "reviews.ctaBody": "Tu puntuación ayuda a otros jugadores a encontrar buenos juegos.",
+  "reviews.ctaFirst": "Sé el primero en opinar",
+  "reviews.tapStar": "Toca una estrella para puntuar",
+  "reviews.guestCta": "Abre el bot para puntuar este juego →",
+};
+
+export const ru: PartialDict = {
+  "brand.name": "Playnix",
+  "brand.tagline": "Найди. Открой. Играй сразу.",
+  "common.play": "Играть",
+  "common.playNow": "Играть сейчас",
+  "common.search": "Поиск",
+  "common.viewAll": "Смотреть все",
+  "common.loading": "Загрузка…",
+  "common.error": "Что-то пошло не так",
+  "common.retry": "Повторить",
+  "common.cancel": "Отмена",
+  "common.save": "Сохранить",
+  "common.saved": "Сохранено",
+  "common.delete": "Удалить",
+  "common.close": "Закрыть",
+  "common.back": "Назад",
+  "common.free": "Бесплатно",
+  "common.premium": "Премиум",
+  "common.language": "Язык",
+  "nav.home": "Главная",
+  "nav.categories": "Категории",
+  "nav.search": "Поиск",
+  "nav.favorites": "Избранное",
+  "nav.profile": "Профиль",
+  "telegram.ctaTitle": "Играйте в Telegram",
+  "telegram.ctaBody": "Откройте бота один раз — и каждая игра запускается мгновенно, без загрузок и установки.",
+  "telegram.ctaButton": "Открыть бота в Telegram",
+  "telegram.ctaHint": "Бесплатно · Работает на любом телефоне",
+  "telegram.bannerBody": "Мгновенная игра, избранное и Премиум прямо в Telegram.",
+  "reviews.ctaTitle": "Оцените эту игру",
+  "reviews.ctaBody": "Ваша оценка помогает другим игрокам находить хорошие игры.",
+  "reviews.ctaFirst": "Станьте первым, кто оценит",
+  "reviews.tapStar": "Нажмите на звезду, чтобы оценить",
+  "reviews.guestCta": "Откройте бота, чтобы оценить игру →",
+};
+
+export const dictionaries = { en, ar, fr, es, ru } as const;
 export type Locale = keyof typeof dictionaries;
-export const locales: Locale[] = ["en", "ar", "fr"];
+export const locales: Locale[] = ["en", "ar", "fr", "es", "ru"];
 export type Dict = Record<DictKey, string>;
+

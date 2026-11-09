@@ -121,6 +121,34 @@ function schemaStatements(): string[] {
     .filter((s) => s.length > 0 && !s.split("\n").every((line) => line.trim().startsWith("--")));
 }
 
+/**
+ * Columns that were added after the initial schema. `CREATE TABLE IF NOT EXISTS`
+ * is a no-op on an existing table, so a fresh column has to be added with an
+ * ALTER. Running it twice is harmless: the "already exists" error is swallowed.
+ */
+const ADDED_COLUMNS: { table: string; column: string; definition: string }[] = [
+  { table: "games", column: "developer_id", definition: "TEXT" },
+  { table: "games", column: "review_note", definition: "TEXT" },
+  { table: "games", column: "submitted_at", definition: "TEXT" },
+];
+
+async function addMissingColumns(): Promise<void> {
+  for (const { table, column, definition } of ADDED_COLUMNS) {
+    const sql = `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`;
+    try {
+      if (dialect === "sqlite") {
+        const db = await initSqlite();
+        db.exec(sql);
+      } else {
+        const p = await initPostgres();
+        await p.query(sql);
+      }
+    } catch {
+      // Column already exists — the normal case on every boot after the first.
+    }
+  }
+}
+
 async function migrate(): Promise<void> {
   const statements = schemaStatements();
   if (dialect === "sqlite") {
@@ -130,6 +158,7 @@ async function migrate(): Promise<void> {
     const p = await initPostgres();
     for (const statement of statements) await p.query(statement);
   }
+  await addMissingColumns();
 }
 
 /** Idempotent migration guard (schema uses IF NOT EXISTS). */

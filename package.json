@@ -26,7 +26,9 @@
     "start": "next start -H 0.0.0.0 -p 3000",
     "typecheck": "npm run sdk:build && tsc --noEmit",
     "verify:games": "tsx --env-file-if-exists=.env.local scripts/verify-games.ts",
-    "welcome": "node scripts/gen-welcome.mjs"
+    "welcome": "node scripts/gen-welcome.mjs",
+    "i18n:coverage": "node scripts/i18n-coverage.mjs",
+    "progression:check": "tsx scripts/check-progression.ts"
   },
   "dependencies": {
     "next": "15.5.29",

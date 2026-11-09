@@ -48,7 +48,18 @@ async function resolveUser(from?: { id: number; first_name?: string; username?: 
 function miniAppKeyboard(locale: Locale, path = "/") {
   return {
     inline_keyboard: [
-      [{ text: locale === "ar" ? "🎮 افتح بلاينكس" : locale === "fr" ? "🎮 Ouvrir Playnix" : "🎮 Open Playnix", web_app: { url: `${appLink()}${path}` } }],
+      [
+        {
+          text: {
+            ar: "🎮 افتح بلاينكس",
+            fr: "🎮 Ouvrir Playnix",
+            es: "🎮 Abrir Playnix",
+            ru: "🎮 Открыть Playnix",
+            en: "🎮 Open Playnix",
+          }[locale],
+          web_app: { url: `${appLink()}${path}` },
+        },
+      ],
     ],
   };
 }
@@ -56,8 +67,17 @@ function miniAppKeyboard(locale: Locale, path = "/") {
 /** The welcome / subscription pitch picture, served straight from the deployment. */
 const welcomeImage = () => `${appLink()}/brand/welcome.jpg`;
 
-const L = (locale: Locale, ar: string, fr: string, en: string) =>
-  locale === "ar" ? ar : locale === "fr" ? fr : en;
+/**
+ * Picks a string for the active locale. Spanish and Russian fall back to
+ * English until translated, which is why `en` is the default branch.
+ */
+const L = (locale: Locale, ar: string, fr: string, en: string, es?: string, ru?: string) => {
+  if (locale === "ar") return ar;
+  if (locale === "fr") return fr;
+  if (locale === "es") return es ?? en;
+  if (locale === "ru") return ru ?? en;
+  return en;
+};
 
 /**
  * The subscription is the product: every welcome message puts a Stars purchase
@@ -68,19 +88,19 @@ function welcomeKeyboard(locale: Locale) {
     inline_keyboard: [
       [
         {
-          text: L(locale, "🎮 العب الآن — مجانًا", "🎮 Jouer — gratuit", "🎮 Play now — free"),
+          text: L(locale, "🎮 العب الآن — مجانًا", "🎮 Jouer — gratuit", "🎮 Play now — free", "🎮 Jugar — gratis", "🎮 Играть — бесплатно"),
           web_app: { url: appLink() },
         },
       ],
       [
         {
-          text: L(locale, "⭐ اشترك في بريميوم", "⭐ S'abonner à Premium", "⭐ Subscribe to Premium"),
+          text: L(locale, "⭐ اشترك في بريميوم", "⭐ S'abonner à Premium", "⭐ Subscribe to Premium", "⭐ Suscribirse a Premium", "⭐ Подписаться на Премиум"),
           callback_data: "premium:plans",
         },
       ],
       [
         {
-          text: L(locale, "👑 الألعاب المميزة", "👑 Jeux premium", "👑 Premium games"),
+          text: L(locale, "👑 الألعاب المميزة", "👑 Jeux premium", "👑 Premium games", "👑 Juegos premium", "👑 Премиум-игры"),
           web_app: { url: `${appLink()}/premium` },
         },
       ],
@@ -118,6 +138,36 @@ function welcomeCaption(locale: Locale, name?: string) {
       "",
       "Paiement en Stars Telegram — annulable à tout moment.",
       "Touchez <b>S'abonner</b> et choisissez votre formule 👇",
+    ].join("\n");
+  }
+  if (locale === "es") {
+    return [
+      `<b>Bienvenido${hello} a Playnix 👋</b>`,
+      "",
+      "20 juegos que se abren dentro de Telegram — sin instalar nada.",
+      "",
+      "<b>Qué desbloquea Premium:</b>",
+      "👑 Toda la colección premium: Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 Sin anuncios dentro de los juegos",
+      "⚡ Acceso anticipado a los estrenos",
+      "",
+      "Se paga con Telegram Stars — cancela cuando quieras.",
+      "Toca <b>Suscribirse</b> y elige tu plan 👇",
+    ].join("\n");
+  }
+  if (locale === "ru") {
+    return [
+      `<b>Добро пожаловать${hello} в Playnix 👋</b>`,
+      "",
+      "20 игр, которые запускаются прямо в Telegram — без установки и регистрации.",
+      "",
+      "<b>Что открывает Премиум:</b>",
+      "👑 Вся премиум-коллекция: Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 Без рекламы внутри игр",
+      "⚡ Ранний доступ к новинкам",
+      "",
+      "Оплата звёздами Telegram — отмена в любой момент.",
+      "Нажмите <b>Подписаться</b> и выберите тариф 👇",
     ].join("\n");
   }
   return [
@@ -419,6 +469,10 @@ export async function handleUpdate(update: TelegramUpdate): Promise<void> {
               { text: "English", callback_data: "lang:en" },
               { text: "العربية", callback_data: "lang:ar" },
               { text: "Français", callback_data: "lang:fr" },
+            ],
+            [
+              { text: "Español", callback_data: "lang:es" },
+              { text: "Русский", callback_data: "lang:ru" },
             ],
           ],
         },

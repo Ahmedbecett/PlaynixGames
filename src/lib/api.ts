@@ -13,6 +13,20 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * Base class for errors raised by domain modules (developers, progression) that
+ * already know the HTTP status they should map to.
+ */
+export class DomainError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400,
+    readonly code = "bad_request",
+  ) {
+    super(message);
+  }
+}
+
 export function json(data: unknown, status = 200): NextResponse {
   return NextResponse.json(data, {
     status,
@@ -37,6 +51,11 @@ export function route(handler: Handler) {
       }
       if (error instanceof ZodError) {
         return fail(422, "Validation failed.", "validation_error", error.flatten());
+      }
+      // Domain errors carry their own status and message; surface them as-is
+      // instead of collapsing every one of them into a 500.
+      if (error instanceof DomainError) {
+        return fail(error.status, error.message, error.code);
       }
       console.error("[api]", error);
       return fail(500, "Something went wrong. Please try again.", "internal_error");
