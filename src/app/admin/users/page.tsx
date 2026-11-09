@@ -27,9 +27,9 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const users = await all<UserRow>(
     `SELECT u.*, (SELECT COUNT(*) FROM play_history p WHERE p.user_id = u.id) AS plays
      FROM users u
-     WHERE (? IS NULL OR u.username LIKE ? OR u.first_name LIKE ? OR u.telegram_id LIKE ?)
+     ${q ? "WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.telegram_id LIKE ?)" : ""}
      ORDER BY u.created_at DESC LIMIT 200`,
-    [q ?? null, `%${q ?? ""}%`, `%${q ?? ""}%`, `%${q ?? ""}%`],
+    q ? [`%${q}%`, `%${q}%`, `%${q}%`] : [],
   );
 
   return (
