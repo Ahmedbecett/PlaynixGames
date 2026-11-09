@@ -7,12 +7,16 @@ export const dynamic = "force-dynamic";
 /**
  * TEMPORARY: re-registers the Telegram webhook after the shared secret was
  * rotated. The bot token and the new secret only exist inside the deployment,
- * so this has to run server-side. Guarded by BOOTSTRAP_TOKEN, and the route is
- * deleted again as soon as it has done its job.
+ * so this has to run server-side. Guarded by BOOTSTRAP_TOKEN, and the whole
+ * route is deleted as soon as it has done its job.
+ *
+ * Accepts GET as well as POST because the caller that triggered the rotation
+ * can only issue GET requests.
  */
-export async function POST(request: NextRequest) {
+async function bootstrap(request: NextRequest) {
   const expected = process.env.BOOTSTRAP_TOKEN;
-  const provided = request.headers.get("x-bootstrap-token");
+  const provided =
+    request.headers.get("x-bootstrap-token") ?? request.nextUrl.searchParams.get("token");
   if (!expected || provided !== expected) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -30,3 +34,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = bootstrap;
+export const POST = bootstrap;
