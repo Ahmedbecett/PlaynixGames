@@ -252,6 +252,22 @@ CREATE TABLE IF NOT EXISTS ad_campaigns (
   created_at    TEXT NOT NULL
 );
 
+-- Rewarded-ad unlocks: watching an ad grants short access to one premium game.
+-- Deliberately separate from `subscriptions` so ads can never masquerade as a paid
+-- entitlement in the payments ledger.
+CREATE TABLE IF NOT EXISTS ad_reward_passes (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id     TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  source      TEXT NOT NULL DEFAULT 'monetag',
+  zone        TEXT,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_passes_user ON ad_reward_passes(user_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_ad_passes_game ON ad_reward_passes(game_id);
+
 CREATE TABLE IF NOT EXISTS search_queries (
   id             TEXT PRIMARY KEY,
   user_id        TEXT REFERENCES users(id) ON DELETE SET NULL,
@@ -280,4 +296,127 @@ CREATE TABLE IF NOT EXISTS app_settings (
 CREATE TABLE IF NOT EXISTS telegram_updates (
   update_id    TEXT PRIMARY KEY,
   processed_at TEXT NOT NULL
+);
+
+-- ---------------------------------------------------------------------------
+-- Developer platform
+--
+-- Anyone can apply to publish games. An application becomes a developer row,
+-- which owns the games it uploads. Games enter the review queue as `pending`
+-- and only a moderator/admin can move them to `published`.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS developers (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  display_name      TEXT NOT NULL,
+  studio_url        TEXT,
+  country           TEXT,
+  payout_telegram   TEXT,
+  revenue_share     INTEGER NOT NULL DEFAULT 70,
+  status            TEXT NOT NULL DEFAULT 'pending',
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_developers_status ON developers(status);
+
+CREATE TABLE IF NOT EXISTS game_assets (
+  id            TEXT PRIMARY KEY,
+  developer_id  TEXT NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+  game_id       TEXT REFERENCES games(id) ON DELETE CASCADE,
+  kind          TEXT NOT NULL,
+  url           TEXT NOT NULL,
+  bytes         INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_game_assets_dev ON game_assets(developer_id);
+CREATE INDEX IF NOT EXISTS idx_game_assets_game ON game_assets(game_id);
+
+CREATE TABLE IF NOT EXISTS game_reviews (
+  id            TEXT PRIMARY KEY,
+  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  reviewer_id   TEXT REFERENCES users(id) ON DELETE SET NULL,
+  action        TEXT NOT NULL,
+  note          TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_game_reviews_game ON game_reviews(game_id, created_at);
+
+-- ---------------------------------------------------------------------------
+-- Player progression: scores, achievements and cloud saves
+--
+-- All three are keyed by (game, user) and are written only by the platform API.
+-- A game never writes these tables directly — it talks to the SDK endpoint.
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS leaderboards (
+  id            TEXT PRIMARY KEY,
+  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  board         TEXT NOT NULL DEFAULT 'default',
+  direction     TEXT NOT NULL DEFAULT 'desc',
+  created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leaderboards_unique ON leaderboards(game_id, board);
+
+CREATE TABLE IF NOT EXISTS leaderboard_scores (
+  id            TEXT PRIMARY KEY,
+  leaderboard_id TEXT NOT NULL REFERENCES leaderboards(id) ON DELETE CASCADE,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score         REAL NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_unique ON leaderboard_scores(leaderboard_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_scores_rank ON leaderboard_scores(leaderboard_id, score);
+
+CREATE TABLE IF NOT EXISTS achievement_defs (
+  id            TEXT PRIMARY KEY,
+  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  key           TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  description   TEXT,
+  points        INTEGER NOT NULL DEFAULT 10,
+  created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_achdefs_unique ON achievement_defs(game_id, key);
+
+CREATE TABLE IF NOT EXISTS achievements (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  key           TEXT NOT NULL,
+  unlocked_at   TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_achievements_unique ON achievements(user_id, game_id, key);
+CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id, unlocked_at);
+
+CREATE TABLE IF NOT EXISTS cloud_saves (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  game_id       TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  slot          TEXT NOT NULL DEFAULT 'default',
+  payload       TEXT NOT NULL,
+  revision      INTEGER NOT NULL DEFAULT 1,
+  updated_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cloud_saves_unique ON cloud_saves(user_id, game_id, slot);
+
+-- Columns added when the developer platform shipped. `CREATE TABLE IF NOT
+-- EXISTS` above never alters an existing table, so they are also added by an
+-- idempotent ALTER in src/lib/db.ts (ensureDeveloperSchema).
+--   games.developer_id     owner of a community-submitted game
+--   games.review_note      moderator feedback shown to the developer
+--   games.submitted_at     when the developer sent it for review
+
+-- Binary images uploaded by developers when no object store is configured.
+-- Vercel's filesystem is read-only, so `public/uploads` only works locally.
+-- In production the re-encoded bytes live here and are served by /api/media/<id>.
+CREATE TABLE IF NOT EXISTS media_assets (
+  id           TEXT PRIMARY KEY,
+  key          TEXT NOT NULL UNIQUE,
+  content_type TEXT NOT NULL,
+  bytes        INTEGER NOT NULL,
+  width        INTEGER NOT NULL,
+  height       INTEGER NOT NULL,
+  data         TEXT NOT NULL,
+  created_at   TEXT NOT NULL
 );

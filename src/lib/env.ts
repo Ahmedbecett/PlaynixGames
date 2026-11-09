@@ -10,9 +10,34 @@ function optional(name: string): string | undefined {
   return trimmed.length ? trimmed : undefined;
 }
 
+/**
+ * Absolute public origin of the site (no trailing slash), used for canonical
+ * URLs, sitemap entries, Open Graph images and Telegram deep links.
+ *
+ * Order: NEXT_PUBLIC_APP_URL → Vercel production domain → current Vercel
+ * deployment → localhost.
+ */
+function resolveSiteUrl(): string {
+  const candidates = [
+    optional("NEXT_PUBLIC_APP_URL"),
+    optional("VERCEL_PROJECT_PRODUCTION_URL"),
+    optional("VERCEL_URL"),
+  ];
+  const found = candidates.find((value) => Boolean(value)) ?? "http://localhost:3000";
+  const withScheme = /^https?:\/\//i.test(found) ? found : `https://${found}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
 export const env = {
+  get siteUrl(): string {
+    return resolveSiteUrl();
+  },
   get appUrl(): string {
-    return (optional("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000").replace(/\/+$/, "");
+    return resolveSiteUrl();
+  },
+  /** Google Search Console "HTML tag" verification token, if used. */
+  get googleSiteVerification(): string | undefined {
+    return optional("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION");
   },
   get botToken(): string | undefined {
     return optional("TELEGRAM_BOT_TOKEN");
@@ -68,6 +93,9 @@ export const env = {
   get botConfigured(): boolean {
     return Boolean(optional("TELEGRAM_BOT_TOKEN"));
   },
+  get adsZoneId(): string | undefined {
+    return optional("NEXT_PUBLIC_ADS_ZONE_ID");
+  },
 };
 
 /** Redacted view of the configuration, safe to render in the admin system panel. */
@@ -78,6 +106,17 @@ export function configStatus() {
     { key: "session_secret", ok: Boolean(optional("SESSION_SECRET")), detail: optional("SESSION_SECRET") ? "configured" : "using development fallback" },
     { key: "admins", ok: env.adminTelegramIds.length > 0, detail: `${env.adminTelegramIds.length} admin id(s) allowlisted` },
     { key: "database", ok: true, detail: env.databaseUrl ? "postgres" : "sqlite (local)" },
-    { key: "object_storage", ok: Boolean(env.s3), detail: env.s3 ? "S3 configured" : "local disk uploads" },
+    {
+      key: "object_storage",
+      // Uploads always work: S3 when configured, the database on a read-only
+      // filesystem (Vercel), the local disk otherwise. See storeImage().
+      ok: true,
+      detail: env.s3 ? "S3 configured" : env.databaseUrl ? "database-backed uploads" : "local disk uploads",
+    },
+    {
+      key: "rewarded_ads",
+      ok: Boolean(env.adsZoneId) && process.env.NEXT_PUBLIC_ADS_ENABLED !== "false",
+      detail: env.adsZoneId ? `Monetag zone ${env.adsZoneId}` : "NEXT_PUBLIC_ADS_ZONE_ID missing",
+    },
   ];
 }

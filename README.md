@@ -1,81 +1,192 @@
+<div align="center">
+
 # Playnix
 
-**Search → Discover → View → Play.** A Telegram Mini App that is a gaming search engine plus an instant-play arcade, with a real Telegram bot and a real admin dashboard behind it.
+**An open-source Telegram Mini App game platform.**
 
-Built as an independent product: own brand, own database, own code. Nothing is reused from other projects.
+Search → discover → play instantly. Bot, web app, admin dashboard,
+developer portal and game SDK — one deployable.
+
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)](https://www.typescriptlang.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[Quick start](#quick-start) · [Architecture](#architecture) · [Game SDK](#game-sdk) · [Developer portal](#developer-portal) · [Contributing](#contributing)
+
+</div>
 
 ---
 
-## What is actually working
+## What this is
 
-| Area | Status | Notes |
-| --- | --- | --- |
-| Home, search, categories, game details | ✅ | Server-rendered, real DB queries, no mock data |
-| Instant play (HTML5) | ✅ | 6 licensed, self-hosted Playnix Originals, iframe player with pause/fullscreen/error handling |
-| Search engine | ✅ | Partial name, keywords, developer, category, tags; filters, sort, infinite scroll, recent + popular searches, suggest-a-game |
-| Telegram auth | ✅ | `initData` HMAC validation server-side, signed HttpOnly session, tested positive/negative |
-| Favorites, play history, ratings/reviews, reports | ✅ | Persisted per user, unique rating per account, server recomputes aggregates |
-| Premium gating | ✅ | Enforced in the player route and the play API, never in the client only |
-| Telegram Stars | ⚠️ implemented, needs a live bot | Invoice creation via Bot API, server-side fulfilment on `successful_payment`, idempotent replay protection, refund revocation. **Not executed against Telegram in this environment** (no outbound access to `api.telegram.org` here) |
-| Admin dashboard | ✅ | Real aggregates, game CRUD + URL verification, users, reviews, reports, ads, plans, announcements, logs, system health |
-| Bot commands | ⚠️ implemented, needs a live bot | `/start /games /search /popular /new /premium /profile /help /language` + broadcasts. Verified by code path, not by live Telegram round-trip |
-| i18n (ar / en / fr) + RTL | ✅ | Every UI string from typed dictionaries; Arabic flips to RTL |
-| Security | ✅ | CSP, HMAC sessions, admin roles, rate limits, SSRF-guarded URL checks, audit log, input validation |
+Playnix is a complete platform for HTML5 games inside Telegram:
 
-Legend: ✅ verified locally · ⚠️ implemented, blocked on live credentials/network.
+- **A storefront** — search, categories, ratings, favourites, play history.
+- **An instant-play player** — games run in an iframe, no downloads, no APKs.
+- **A Telegram bot** — `/start`, catalogue browsing, deep links into specific
+  games, and Stars subscriptions.
+- **An admin dashboard** — catalog CRUD, users, reviews, reports, ads,
+  announcements, audit log.
+- **A developer portal** — outside studios apply, upload builds, and track a
+  review queue.
+- **A game SDK** — leaderboards, achievements and cloud saves in three lines.
+- **i18n** — English, Arabic, French complete; Spanish and Russian in progress.
+
+Everything is real: a real database, real authentication via Telegram `initData`,
+real server-side premium enforcement. There is no mock data layer.
+
+## Screens in thirty seconds
+
+| Area | Path |
+| --- | --- |
+| Storefront | `/` `/categories` `/category/<slug>` `/search` |
+| Game detail | `/game/<slug>` |
+| Player | `/play/<slug>` |
+| Premium | `/premium` |
+| Developer portal | `/developers` |
+| Admin | `/admin` |
+| Bot webhook | `/api/telegram/webhook` |
+| SDK | `/api/sdk/<slug>/*` |
 
 ---
 
 ## Quick start
 
+Requires **Node.js 22.5+** (the local database uses `node:sqlite`).
+
 ```bash
-cp .env.example .env.local     # fill in the values you have
+git clone https://github.com/Ahmedbecett/PlaynixGames.git
+cd PlaynixGames
 npm install
-npm run db:migrate             # creates the schema (SQLite locally)
-npm run db:seed                # 16 categories, 6 games, 3 premium plans
-npm run dev                    # http://localhost:3000
+cp .env.example .env.local
+npm run db:migrate
+npm run db:seed
+npm run dev            # http://localhost:3000
 ```
 
-Outside Telegram you can browse in **preview mode** (`ALLOW_DEV_LOGIN=true`, development only): the banner on the home page signs you in as a local admin so the dashboard is explorable. This account is clearly labelled and refuses to exist in production.
+No Postgres, no Docker, no bot token needed to browse the site. Set
+`ALLOW_DEV_LOGIN=true` in `.env.local` to sign in as a local admin and explore
+the dashboard — that path is hard-disabled when `NODE_ENV=production`.
 
-Production:
+### Production
 
 ```bash
-# DATABASE_URL=postgres://…  (required on Vercel / any read-only filesystem)
+DATABASE_URL=postgres://…     # required on Vercel (read-only filesystem)
 npm run db:migrate && npm run db:seed
 npm run build && npm start
-npm run bot:webhook            # registers https://<APP_URL>/api/telegram/webhook
+npm run bot:webhook           # registers https://<APP_URL>/api/telegram/webhook
 ```
 
-Arabic walkthrough: [`docs/SETUP_AR.md`](docs/SETUP_AR.md). Full steps in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); bot wiring (BotFather, webhook, menu button, deep links, tunnel) in [`docs/BOT_SETUP.md`](docs/BOT_SETUP.md).
+Full walkthroughs: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) ·
+[`docs/BOT_SETUP.md`](docs/BOT_SETUP.md) · [`docs/SETUP_AR.md`](docs/SETUP_AR.md) (Arabic)
+
+---
+
+## Architecture
+
+```
+db/schema.sql              portable schema — 31 tables, one dialect for Postgres + SQLite
+public/games/<slug>/       self-hosted HTML5 games (single-file each)
+public/sdk/playnix-sdk.js  browser SDK used by every game
+public/covers/             generated cover art (SVG → JPEG, reproducible)
+src/app/(main)/            storefront pages
+src/app/admin/             admin dashboard
+src/app/developers/        developer portal
+src/app/play/[slug]/       iframe player shell
+src/app/api/               REST endpoints
+src/lib/                   db, auth, telegram, payments, bot, i18n, progression, developers
+sdk/                       `playnix-sdk` npm package (typed client + bot helpers)
+scripts/                   migrate, seed, covers, checks, smoke tests
+docs/                      architecture, API, deployment, SDK, game dev, security, SEO
+```
+
+### One schema, two engines
+
+Production runs PostgreSQL; local development runs SQLite through
+`node:sqlite` with zero native dependencies. The same `db/schema.sql` applies to
+both, which is enforced by three conventions:
+
+- `TEXT` ids (UUIDs), ISO-8601 `TEXT` timestamps, `INTEGER` 0/1 booleans
+- `?` placeholders, translated to `$1..$n` for Postgres
+- `CREATE TABLE IF NOT EXISTS` everywhere, plus idempotent `ALTER`s for columns
+  added later (`src/lib/db.ts`)
+
+This means `git clone && npm install && npm run dev` works with no database
+server, and migrations are the same file in both environments.
+
+### Server-side authority
+
+Nothing that matters is trusted from the browser:
+
+| Concern | Where it is enforced |
+| --- | --- |
+| Premium access | `/play/[slug]` route **and** `/api/games/[id]/play` |
+| Scores | `/api/sdk/:slug/scores`, personal best computed in SQL |
+| Achievements | Must be declared by the game before it can be unlocked |
+| Saves | Private per player, optimistic concurrency via `revision` |
+| Publishing | Only `POST /api/admin/review/:id` can set `published` |
+
+---
+
+## Game SDK
+
+Games get leaderboards, achievements and cloud saves with one script tag.
+
+```html
+<script src="/sdk/playnix-sdk.js"></script>
+<script>
+  const playnix = Playnix.create({ game: "my-game" });
+
+  playnix.score(1250);                          // leaderboard, best-score only
+  playnix.unlock("first-win");                  // achievement
+  playnix.saveLocalFirst({ level: 4 });         // offline-first cloud save
+</script>
+```
+
+- No dependencies, ~4 KB, every call fails soft so a bad network cannot freeze
+  a session.
+- The player is identified by the platform's HttpOnly cookie — the game never
+  holds a token.
+- Full reference: [`docs/SDK.md`](docs/SDK.md)
+
+The API is also usable directly (see the HTTP table in that document), so a
+Unity export or a server-side job can report scores the same way.
+
+---
+
+## Developer portal
+
+Outside developers publish without a maintainer touching the database:
+
+```
+/developers  →  apply  →  moderator approves  →  submit a game
+             →  review queue  →  published or sent back with a note
+```
+
+Rules baked into the code:
+
+- A submission always enters `pending`. A developer cannot publish their own game.
+- Approval writes a `game_reviews` audit row with the reviewer's id.
+- Any edit after approval sends the game back through review.
+- Reviewers can request changes with a note the developer sees in their dashboard
+  and as a Telegram notification.
+
+Admin side: `/admin/developers`.
 
 ---
 
 ## Stack
 
-- **Next.js 15** (App Router, React 19, TypeScript strict) — UI + API in one deployable
-- **PostgreSQL** in production, **SQLite** (`node:sqlite`, zero native deps) for local dev — one portable schema for both
-- **Tailwind CSS v4** with the Playnix design tokens
-- **Telegram**: Bot API, Mini App SDK, `initData` signature validation, Stars invoices
-- **sharp** for server-side image re-encoding of admin uploads
-
-Why one schema for two engines: TEXT/INTEGER/REAL columns, ISO-8601 timestamps, `?` placeholders translated to `$n` for PostgreSQL. See `src/lib/db.ts`.
-
----
-
-## Project layout
-
-```
-db/schema.sql              portable schema (22 tables)
-public/games/<slug>/       the six playable HTML5 games (self-hosted)
-public/brand/              logo SVG + rendered PNGs (bot avatar, icons)
-src/app/(main)/            Mini App pages (home, search, game, player outside this group)
-src/app/admin/             admin dashboard pages
-src/app/api/               REST endpoints (games, users, payments, admin, telegram webhook)
-src/lib/                   db, auth, telegram, payments, bot, i18n, validation, storage, verify-game
-scripts/                   migrate, seed, reset, webhook, polling, smoke tests, game verification
-docs/                      architecture, API, deployment, admin guide, testing, licensing, security
-```
+| Layer | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router), React 19, TypeScript strict |
+| Styling | Tailwind CSS v4 + design tokens |
+| Database | PostgreSQL (prod) / SQLite via `node:sqlite` (dev) |
+| Auth | Telegram `initData` HMAC validation, signed HttpOnly session |
+| Payments | Telegram Stars invoices, server-side fulfilment |
+| Images | `sharp` — server-side re-encode of every upload |
+| Tests | Node test runner (SDK), jsdom (games), HTTP smoke suite |
 
 ---
 
@@ -84,35 +195,96 @@ docs/                      architecture, API, deployment, admin guide, testing, 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` / `build` / `start` | Next.js lifecycle |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsc --noEmit` (builds the SDK first) |
 | `npm run db:migrate` | Apply schema (idempotent) |
-| `npm run db:seed` | Seed catalog (never overwrites admin edits) |
-| `npm run db:reset -- --yes` | Dev-only destructive reset |
-| `npm run verify:games` | Re-run launch checks on every published game |
+| `npm run db:seed` | Seed the catalog (never overwrites admin edits) |
+| `npm run covers` | Regenerate cover art |
+| `npm run games:check` | Boot every bundled game in jsdom |
+| `npm run i18n:coverage` | Translation coverage per locale |
+| `npm run sdk:build` / `sdk:test` | Build and test the SDK package |
+| `npm run ads:check` | 30 offline rewarded-ad checks |
 | `npm run smoke` | 38 acceptance checks (DB, auth, search, payments, HTTP, security) |
-| `npm run bot:webhook` | Register the webhook + menu button |
-| `npm run bot:poll` | Long-polling bot for local development |
+| `npm run bot:webhook` / `bot:poll` | Register the webhook / long-poll locally |
 
 ---
 
-## The six bundled games
+## The bundled games
 
-All six are **Playnix Originals** — original code and art owned by this project, so there is no third-party licensing risk in shipping them. Each one is a real game with touch + keyboard input, pause handling and local high scores.
+Twenty **Playnix Originals** — original code, generated cover art, no
+third-party licensing risk. Every category ships at least one playable title.
 
-`Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` · `Reversi Duel` (premium)
+`Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` ·
+`Memory Matrix` · `Tetra Stack` · `Tile Merge` · `Flap Quest` · `Maze Escape` ·
+`Penalty Shot` · `Speed Runner` · `Sudoku Grid` · `Tower Guard` ·
+`Dungeon Depths` · `Card Blitz` · `Reversi Duel` · `Skyline Builder` ·
+`Turret Line` · `Math Rush` · `Connect Four Duel`
 
-Licensing policy for adding third-party games: [`docs/GAME_SOURCES.md`](docs/GAME_SOURCES.md). **Publicly accessible ≠ free to redistribute** — nothing is published without a verified licence recorded in the `games.license` column.
+Adding your own: [`docs/GAME_DEVELOPMENT.md`](docs/GAME_DEVELOPMENT.md).
 
 ---
 
-## Secrets
+## Internationalisation
 
-Never commit real credentials. `.env.local` is gitignored; only `.env.example` ships.
+Every UI string lives in `src/lib/i18n/dictionary.ts`. English is the source of
+truth; a locale may be partial and fall back to English at runtime, so a
+half-finished translation never shows a raw key.
 
-> If a bot token was ever pasted into a chat, a ticket, or a screenshot, treat it as compromised and revoke it with `/revoke` in **@BotFather**, then set the new token in your host's environment variables.
+| Locale | Coverage |
+| --- | --- |
+| English | 361/361 (100%) |
+| Arabic (RTL) | 361/361 (100%) |
+| French | 361/361 (100%) |
+| Spanish | 361/361 (100%) |
+| Russian | 361/361 (100%) |
+
+```bash
+npm run i18n:coverage          # table of every locale
+npm run i18n:coverage -- --missing ru   # print the exact keys to translate
+```
+
+Translations are a genuinely useful first contribution — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## Contributing
+
+Contributions are welcome: a game, a translation, a bug fix, a docs improvement.
+
+```bash
+npm run typecheck && npm run build && npm run games:check && npm run sdk:test
+```
+
+All four must pass before a pull request is reviewed.
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — process, ground rules, commit style
+- [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) — architecture tour and code conventions
+- [`docs/GAME_DEVELOPMENT.md`](docs/GAME_DEVELOPMENT.md) — build a game
+
+### Ground rules
+
+1. No placeholder content — no fake ratings, no invented studios.
+2. No new runtime dependencies without an issue first.
+3. Every user-facing string goes through the dictionary.
+4. Anything involving money, access or scores is validated on the server.
+
+---
+
+## Security
+
+- CSP, HMAC-signed sessions, SameSite cookies, per-route rate limits
+- SSRF-guarded URL verification before a game can go live
+- Server-side image re-encoding (strips EXIF, blocks polyglot files)
+- Admin actions written to an audit log
+- Secrets only ever in environment variables — `.env.local` is gitignored
+
+Found a vulnerability? Please report it privately rather than in a public issue.
 
 ---
 
 ## License
 
-Application code © Playnix. The six games in `public/games/` are original works by this project and may not be redistributed separately without permission. Third-party dependencies keep their own licenses (see `package.json`).
+**MIT** — see [`LICENSE`](LICENSE). Use it, fork it, ship your own platform.
+
+The games in `public/games/` are original works by this project, also MIT.
+Third-party dependencies keep their own licenses.

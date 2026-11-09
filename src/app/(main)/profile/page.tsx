@@ -10,7 +10,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ProfileSettings } from "@/components/ProfileSettings";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Profile" };
+export const metadata: Metadata = { title: "Profile", robots: { index: false, follow: true } };
 
 type HistoryRow = {
   game_id: string;

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Tile Merge</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; font-size:12px;
+    letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+  header b { color:var(--text); font-variant-numeric:tabular-nums; font-size:15px; }
+  #stage { flex:1; position:relative; display:grid; place-items:center; padding:6px 10px 14px; }
+  canvas { display:block; border-radius:20px; background:#0d1220; box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); touch-action:none; }
+  #tools { display:flex; gap:8px; justify-content:center; padding:0 10px 16px; }
+  #tools button { flex:1; max-width:150px; padding:12px; border-radius:14px; border:1px solid rgba(139,92,246,.35);
+    background:rgba(23,30,48,.92); color:var(--text); font-weight:700; font-size:13px; }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.84); backdrop-filter:blur(6px); }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card); border:1px solid rgba(34,211,238,.25); max-width:320px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px; color:#0b0f18;
+    background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span>Score <b id="score">0</b></span><span>Best <b id="best">0</b></span><span>Target <b>2048</b></span></header>
+  <div id="stage">
+    <canvas id="game" width="480" height="480" aria-label="Tile Merge board"></canvas>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Tile Merge</h1>
+        <p id="hint">Swipe to slide every tile. Two equal tiles merge into one — reach 2048 without filling the board.</p>
+        <button id="startBtn">Start game</button>
+      </div>
+    </div>
+  </div>
+  <div id="tools">
+    <button id="undo">↶ Undo</button>
+    <button id="restart">New game</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const N = 4;
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+  const hintEl = document.getElementById("hint");
+  const KEY = "playnix.tile-merge.best";
+
+  const COLORS = {
+    2:["#1e2740","#c8d2e6"], 4:["#243252","#dbe4f5"], 8:["#2c4570","#eaf2ff"],
+    16:["#1d5f8a","#e6f7ff"], 32:["#12708f","#e6fbff"], 64:["#0f6f6a","#e8fffb"],
+    128:["#6b4bb0","#f3ecff"], 256:["#8352c9","#f7ecff"], 512:["#a24ad0","#fbeaff"],
+    1024:["#d1521f","#fff0e6"], 2048:["#ff7a18","#1a0f04"], 4096:["#22d3ee","#04161b"]
+  };
+
+  let grid, score, best, won, running, paused, cell, gap, cssSize, history;
+
+  best = Number(localStorage.getItem(KEY) || 0);
+  bestEl.textContent = String(best);
+
+  function empty() { return Array.from({ length: N }, () => Array(N).fill(0)); }
+
+  function spawn() {
+    const open = [];
+    for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) if (!grid[y][x]) open.push([y, x]);
+    if (!open.length) return;
+    const [y, x] = open[Math.floor(Math.random() * open.length)];
+    grid[y][x] = Math.random() < 0.9 ? 2 : 4;
+  }
+
+  function resize() {
+    const stage = canvas.parentElement;
+    const size = Math.max(240, Math.floor(Math.min(stage.clientWidth - 20, stage.clientHeight - 12, 520)));
+    cssSize = size;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.style.width = size + "px";
+    canvas.style.height = size + "px";
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gap = Math.round(size * 0.028);
+    cell = (size - gap * (N + 1)) / N;
+    draw();
+  }
+
+  function draw() {
+    if (!cell) return;
+    ctx.clearRect(0, 0, cssSize, cssSize);
+    ctx.fillStyle = "#0d1220";
+    ctx.fillRect(0, 0, cssSize, cssSize);
+    for (let y = 0; y < N; y += 1) {
+      for (let x = 0; x < N; x += 1) {
+        const px = gap + x * (cell + gap), py = gap + y * (cell + gap);
+        const value = grid ? grid[y][x] : 0;
+        const palette = COLORS[value] || ["#22d3ee", "#04161b"];
+        ctx.fillStyle = value ? palette[0] : "#151c2c";
+        const r = Math.max(6, cell * 0.12);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px, py, cell, cell, r); else ctx.rect(px, py, cell, cell);
+        ctx.fill();
+        if (!value) continue;
+        if (value >= 128) { ctx.shadowColor = palette[0]; ctx.shadowBlur = cell * 0.25; }
+        ctx.fillStyle = palette[1];
+        const digits = String(value).length;
+        const fontSize = Math.round(cell * (digits > 3 ? 0.30 : digits > 2 ? 0.36 : 0.44));
+        ctx.font = "800 " + fontSize + "px ui-sans-serif,system-ui,sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(value), px + cell / 2, py + cell / 2 + 1);
+        ctx.shadowBlur = 0;
+      }
+    }
+    if (paused && running) {
+      ctx.fillStyle = "rgba(9,11,20,.66)";
+      ctx.fillRect(0, 0, cssSize, cssSize);
+      ctx.fillStyle = "#F8FAFC";
+      ctx.font = "600 " + Math.round(cssSize / 14) + "px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Paused", cssSize / 2, cssSize / 2);
+    }
+  }
+
+  function cloneGrid() { return grid.map((row) => row.slice()); }
+
+  function slide(line) {
+    const values = line.filter(Boolean);
+    const merged = [];
+    let gained = 0;
+    for (let i = 0; i < values.length; i += 1) {
+      if (i + 1 < values.length && values[i] === values[i + 1]) {
+        const sum = values[i] * 2;
+        merged.push(sum);
+        gained += sum;
+        if (sum === 2048) won = true;
+        i += 1;
+      } else {
+        merged.push(values[i]);
+      }
+    }
+    while (merged.length < N) merged.push(0);
+    return { line: merged, gained };
+  }
+
+  function move(dir) {
+    if (!running || paused) return;
+    const before = cloneGrid();
+    let gained = 0;
+    let moved = false;
+    for (let index = 0; index < N; index += 1) {
+      let line;
+      if (dir === "left" || dir === "right") line = grid[index].slice();
+      else line = grid.map((row) => row[index]);
+      if (dir === "right" || dir === "down") line.reverse();
+      const result = slide(line);
+      if (dir === "right" || dir === "down") result.line.reverse();
+      gained += result.gained;
+      if (dir === "left" || dir === "right") {
+        if (result.line.some((v, i) => v !== grid[index][i])) moved = true;
+        grid[index] = result.line;
+      } else {
+        result.line.forEach((v, i) => { if (grid[i][index] !== v) moved = true; grid[i][index] = v; });
+      }
+    }
+    if (!moved) return;
+    history = before;
+    score += gained;
+    scoreEl.textContent = String(score);
+    spawn();
+    draw();
+    if (!canMove()) gameOver();
+  }
+
+  function canMove() {
+    for (let y = 0; y < N; y += 1) {
+      for (let x = 0; x < N; x += 1) {
+        if (!grid[y][x]) return true;
+        if (x + 1 < N && grid[y][x] === grid[y][x + 1]) return true;
+        if (y + 1 < N && grid[y][x] === grid[y + 1][x]) return true;
+      }
+    }
+    return false;
+  }
+
+  function gameOver() {
+    running = false;
+    if (score > best) { best = score; localStorage.setItem(KEY, String(best)); bestEl.textContent = String(best); }
+    overlay.classList.remove("hidden");
+    hintEl.textContent = (won ? "You reached 2048! " : "") + "Final score " + score + ". The board is full.";
+    startBtn.textContent = "Play again";
+  }
+
+  function reset() {
+    grid = empty();
+    score = 0; won = false; history = null;
+    scoreEl.textContent = "0";
+    spawn(); spawn();
+    draw();
+  }
+
+  function start() {
+    reset();
+    running = true; paused = false;
+    overlay.classList.add("hidden");
+  }
+
+  document.getElementById("restart").addEventListener("click", () => { start(); });
+  document.getElementById("undo").addEventListener("click", () => {
+    if (!history || !running) return;
+    grid = history;
+    history = null;
+    draw();
+  });
+  startBtn.addEventListener("click", start);
+
+  window.addEventListener("keydown", (event) => {
+    const map = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", KeyA: "left", KeyD: "right", KeyW: "up", KeyS: "down" };
+    if (event.code === "Space") { event.preventDefault(); if (!running) start(); else { paused = !paused; draw(); } return; }
+    const dir = map[event.code];
+    if (dir) { event.preventDefault(); move(dir); }
+  });
+
+  let startPoint = null;
+  canvas.addEventListener("touchstart", (event) => {
+    const t = event.changedTouches[0];
+    startPoint = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  canvas.addEventListener("touchend", (event) => {
+    if (!startPoint) return;
+    const t = event.changedTouches[0];
+    const dx = t.clientX - startPoint.x, dy = t.clientY - startPoint.y;
+    startPoint = null;
+    if (Math.abs(dx) < 22 && Math.abs(dy) < 22) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
+    else move(dy > 0 ? "down" : "up");
+  }, { passive: true });
+
+  let mouseDown = null;
+  canvas.addEventListener("mousedown", (event) => { mouseDown = { x: event.clientX, y: event.clientY }; });
+  window.addEventListener("mouseup", (event) => {
+    if (!mouseDown) return;
+    const dx = event.clientX - mouseDown.x, dy = event.clientY - mouseDown.y;
+    mouseDown = null;
+    if (Math.abs(dx) < 26 && Math.abs(dy) < 26) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
+    else move(dy > 0 ? "down" : "up");
+  });
+
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { paused = true; draw(); } });
+  window.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type === "playnix:pause" && running) { paused = true; draw(); }
+    if (data.type === "playnix:resume" && running) { paused = false; draw(); }
+  });
+  window.addEventListener("resize", resize);
+
+  running = false;
+  reset();
+  resize();
+})();
+</script>
+</body>
+</html>

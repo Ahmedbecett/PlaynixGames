@@ -8,7 +8,7 @@ import { Icon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Search" };
+export const metadata: Metadata = { title: "Search", robots: { index: false, follow: true } };
 
 const SORTS: SortKey[] = ["relevance", "popular", "newest", "rating"];
 

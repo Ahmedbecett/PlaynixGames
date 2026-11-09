@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { HttpError, assertSameOrigin, clientIp, json, requireUser, route } from "@/lib/api";
 import { getActiveSubscription } from "@/lib/auth";
+import { canPlayPremiumGame } from "@/lib/ads";
 import { one, run } from "@/lib/db";
 import type { GameRow } from "@/lib/games";
 import { consume } from "@/lib/rate-limit";
@@ -26,7 +27,10 @@ export const POST = route(async (request: NextRequest, context) => {
   }
   if (game.pricing_type === "premium") {
     const subscription = await getActiveSubscription(user.id);
-    if (!subscription) throw new HttpError(402, "Premium membership is required for this game.", "premium_required");
+    const allowed = await canPlayPremiumGame(user.id, game.id, Boolean(subscription));
+    if (!allowed) {
+      throw new HttpError(402, "Premium membership is required for this game.", "premium_required");
+    }
   }
 
   const sessionId = crypto.randomUUID();

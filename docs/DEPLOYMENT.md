@@ -43,7 +43,7 @@ DATABASE_URL="postgres://…?sslmode=require" npm run db:seed
 Deploys do this automatically: `prebuild` runs `scripts/ensure-db.ts`, which applies the idempotent schema and seeds the catalog the first time the `games` table is empty. Run the commands manually only when you want to pre-seed outside a deploy.
 
 `db:migrate` is idempotent (`CREATE TABLE IF NOT EXISTS`), so it is safe to run on every deploy.
-`db:seed` inserts categories, the six games and the three plans, and never overwrites rows an admin has edited (`created_by IS NOT NULL`).
+`db:seed` inserts categories, the sixteen games and the three plans, and never overwrites rows an admin has edited (`created_by IS NOT NULL`). The deploy bootstrap (`scripts/ensure-db.ts`) runs the same insert-only seed on every build, so newly bundled games appear in production without a manual migration.
 
 ## 3. Deploy
 

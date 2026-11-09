@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Dungeon Depths</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; gap:6px; padding:10px 14px; font-size:12px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--muted); }
+  header b { color:var(--text); font-variant-numeric:tabular-nums; }
+  #stage { flex:1; position:relative; display:grid; place-items:center; padding:0 8px; }
+  canvas { display:block; border-radius:18px; background:#0a0f1c; box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); touch-action:none; }
+  #pad { display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(2,56px); gap:8px;
+    justify-content:center; padding:8px 10px 16px; }
+  #pad button { border:1px solid rgba(139,92,246,.35); background:rgba(23,30,48,.92); color:var(--text);
+    border-radius:14px; font-size:18px; }
+  #pad button:active { background:rgba(255,122,24,.25); border-color:var(--accent); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.88); backdrop-filter:blur(6px); }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card); border:1px solid rgba(34,211,238,.25); max-width:330px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 14px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px; color:#0b0f18;
+    background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .badge { display:inline-block; margin:0 0 10px; padding:4px 10px; border-radius:99px; font-size:11px; font-weight:800;
+    letter-spacing:.08em; text-transform:uppercase; color:#0b0f18; background:linear-gradient(135deg,#8B5CF6,#22D3EE); }
+  .hidden { display:none !important; }
+  @media (min-width:760px) and (pointer:fine) { #pad { opacity:.7; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span>Depth <b id="depth">1</b></span><span>HP <b id="hp">24</b></span><span>Gold <b id="gold">0</b></span><span>Score <b id="score">0</b></span></header>
+  <div id="stage">
+    <canvas id="game" width="630" height="630" aria-label="Dungeon map"></canvas>
+    <div id="overlay">
+      <div class="panel">
+        <div class="badge">Premium</div>
+        <h1>Dungeon Depths</h1>
+        <p id="hint">Move with the arrows. Walk into a monster to attack it. Grab potions, collect gold and find the stairs down.</p>
+        <button id="startBtn">Enter the dungeon</button>
+      </div>
+    </div>
+  </div>
+  <div id="pad">
+    <span></span><button data-dir="up" aria-label="Up">▲</button><span></span>
+    <button data-dir="left" aria-label="Left">◀</button><button data-dir="down" aria-label="Down">▼</button><button data-dir="right" aria-label="Right">▶</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const depthEl = document.getElementById("depth");
+  const hpEl = document.getElementById("hp");
+  const goldEl = document.getElementById("gold");
+  const scoreEl = document.getElementById("score");
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+  const hintEl = document.getElementById("hint");
+
+  const N = 21;
+  let map, player, monsters, items, stairs, depth, gold, kills, hp, maxHp, running, paused, message, scale, log;
+
+  function idx(x, y) { return y * N + x; }
+  function rnd(n) { return Math.floor(Math.random() * n); }
+
+  function generate(floor) {
+    map = new Uint8Array(N * N).fill(1);
+    const rooms = [];
+    for (let attempt = 0; attempt < 90 && rooms.length < 6; attempt += 1) {
+      const w = 4 + rnd(4), h = 4 + rnd(4);
+      const x = 1 + rnd(N - w - 2), y = 1 + rnd(N - h - 2);
+      const overlap = rooms.some((r) => x < r.x + r.w + 1 && x + w + 1 > r.x && y < r.y + r.h + 1 && y + h + 1 > r.y);
+      if (overlap) continue;
+      rooms.push({ x, y, w, h });
+      for (let ry = y; ry < y + h; ry += 1) for (let rx = x; rx < x + w; rx += 1) map[idx(rx, ry)] = 0;
+    }
+    // corridors between consecutive rooms
+    for (let i = 0; i < rooms.length - 1; i += 1) {
+      const a = rooms[i], b = rooms[i + 1];
+      let ax = Math.floor(a.x + a.w / 2), ay = Math.floor(a.y + a.h / 2);
+      const bx = Math.floor(b.x + b.w / 2), by = Math.floor(b.y + b.h / 2);
+      while (ax !== bx) { map[idx(ax, ay)] = 0; ax += Math.sign(bx - ax); }
+      while (ay !== by) { map[idx(ax, ay)] = 0; ay += Math.sign(by - ay); }
+      map[idx(bx, by)] = 0;
+    }
+
+    const centreOf = (room) => ({ x: Math.floor(room.x + room.w / 2), y: Math.floor(room.y + room.h / 2) });
+    const start = centreOf(rooms[0]);
+    player = { x: start.x, y: start.y };
+    const end = centreOf(rooms[rooms.length - 1]);
+    stairs = { x: end.x, y: end.y };
+
+    monsters = [];
+    const count = Math.min(roomCells(rooms) - 2, 3 + floor);
+    for (let i = 0; i < count; i += 1) {
+      const spot = freeSpot(rooms, i);
+      if (!spot) continue;
+      const hpMonster = 5 + Math.round(floor * 1.8) + rnd(3);
+      monsters.push({ x: spot.x, y: spot.y, hp: hpMonster, maxHp: hpMonster, atk: 1 + Math.floor(floor / 2), xp: 2 + floor });
+    }
+
+    items = [];
+    for (let i = 0; i < 3; i += 1) {
+      const spot = freeSpot(rooms, 20 + i);
+      if (spot) items.push({ x: spot.x, y: spot.y, kind: "potion" });
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const spot = freeSpot(rooms, 40 + i);
+      if (spot) items.push({ x: spot.x, y: spot.y, kind: "gold", amount: 4 + floor * 2 });
+    }
+    message = null;
+  }
+
+  function roomCells(rooms) { return rooms.reduce((total, room) => total + room.w * room.h, 0); }
+
+  function occupied(x, y) {
+    if (player.x === x && player.y === y) return true;
+    if (stairs && stairs.x === x && stairs.y === y) return true;
+    if (monsters && monsters.some((m) => m.x === x && m.y === y)) return true;
+    if (items && items.some((i) => i.x === x && i.y === y)) return true;
+    return false;
+  }
+
+  function freeSpot(rooms, seed) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const room = rooms[(seed + attempt) % rooms.length];
+      const x = room.x + rnd(room.w), y = room.y + rnd(room.h);
+      if (map[idx(x, y)]) continue;
+      if (occupied(x, y)) continue;
+      const near = Math.abs(x - player.x) + Math.abs(y - player.y) < 3;
+      if (near) continue;
+      return { x, y };
+    }
+    return null;
+  }
+
+  function resize() {
+    const stage = canvas.parentElement;
+    const px = Math.max(240, Math.floor(Math.min(stage.clientWidth - 16, stage.clientHeight - 12, 660)));
+    scale = px / N;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.style.width = px + "px";
+    canvas.style.height = px + "px";
+    canvas.width = Math.floor(px * dpr);
+    canvas.height = Math.floor(px * dpr);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    draw();
+  }
+
+  function draw() {
+    if (!scale) return;
+    ctx.clearRect(0, 0, N, N);
+
+    for (let y = 0; y < N; y += 1) {
+      for (let x = 0; x < N; x += 1) {
+        if (map && map[idx(x, y)]) {
+          ctx.fillStyle = "#101728";
+          ctx.fillRect(x, y, 1, 1);
+          ctx.strokeStyle = "rgba(139,92,246,.13)";
+          ctx.lineWidth = 0.03;
+          ctx.strokeRect(x + 0.05, y + 0.05, 0.9, 0.9);
+        } else {
+          ctx.fillStyle = "#1a2338";
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+
+    if (stairs) {
+      ctx.fillStyle = "#22D3EE";
+      ctx.shadowColor = "rgba(34,211,238,.9)";
+      ctx.shadowBlur = 0.6;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(stairs.x + 0.16, stairs.y + 0.16, 0.68, 0.68, 0.16);
+      else ctx.rect(stairs.x + 0.16, stairs.y + 0.16, 0.68, 0.68);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    for (const item of items || []) {
+      ctx.font = "0.8px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(item.kind === "potion" ? "🧪" : "💰", item.x + 0.5, item.y + 0.55);
+    }
+
+    for (const monster of monsters || []) {
+      ctx.font = "0.78px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("👹", monster.x + 0.5, monster.y + 0.56);
+      ctx.fillStyle = "rgba(9,11,20,.85)";
+      ctx.fillRect(monster.x + 0.12, monster.y + 0.06, 0.76, 0.11);
+      ctx.fillStyle = "#EF4444";
+      ctx.fillRect(monster.x + 0.12, monster.y + 0.06, 0.76 * Math.max(0, monster.hp / monster.maxHp), 0.11);
+    }
+
+    if (player) {
+      ctx.fillStyle = "#FF7A18";
+      ctx.shadowColor = "rgba(255,122,24,.9)";
+      ctx.shadowBlur = 0.6;
+      ctx.beginPath(); ctx.arc(player.x + 0.5, player.y + 0.5, 0.34, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.font = "0.7px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("🛡️", player.x + 0.5, player.y + 0.56);
+    }
+
+    if (message) {
+      ctx.fillStyle = "rgba(9,11,20,.8)";
+      ctx.fillRect(0, N - 2.1, N, 2.1);
+      ctx.fillStyle = "#F8FAFC";
+      ctx.font = "600 0.85px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(message, N / 2, N - 1.05);
+    }
+
+    if (!running || paused) {
+      ctx.fillStyle = "rgba(9,11,20,.55)";
+      ctx.fillRect(0, 0, N, N);
+      if (paused && running) {
+        ctx.fillStyle = "#F8FAFC";
+        ctx.font = "600 1.4px system-ui,sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Paused", N / 2, N / 2);
+      }
+    }
+  }
+
+  function hud() {
+    depthEl.textContent = String(depth);
+    hpEl.textContent = hp + "/" + maxHp;
+    goldEl.textContent = String(gold);
+    scoreEl.textContent = String(gold + kills * 10 + depth * 25);
+  }
+
+  function move(dx, dy) {
+    if (!running || paused) return;
+    const nx = player.x + dx, ny = player.y + dy;
+    if (nx < 0 || ny < 0 || nx >= N || ny >= N) return;
+    if (map[idx(nx, ny)]) return;
+
+    const monster = monsters.find((m) => m.x === nx && m.y === ny);
+    if (monster) {
+      const dmg = 3 + Math.floor(depth / 2);
+      monster.hp -= dmg;
+      message = "You hit the monster for " + dmg + ".";
+      if (monster.hp <= 0) {
+        monsters = monsters.filter((m) => m !== monster);
+        kills += 1;
+        gold += monster.xp;
+        message = "Monster slain! +" + monster.xp + " gold.";
+      }
+      endTurn();
+      return;
+    }
+
+    player.x = nx;
+    player.y = ny;
+
+    const taken = items.findIndex((item) => item.x === nx && item.y === ny);
+    if (taken >= 0) {
+      const item = items[taken];
+      if (item.kind === "potion") {
+        hp = Math.min(maxHp, hp + 8);
+        message = "Potion! +8 HP.";
+      } else {
+        gold += item.amount;
+        message = "Gold! +" + item.amount + ".";
+      }
+      items.splice(taken, 1);
+    }
+
+    if (nx === stairs.x && ny === stairs.y) { nextFloor(); return; }
+    endTurn();
+  }
+
+  function endTurn() {
+    for (const monster of monsters) {
+      const dist = Math.max(Math.abs(monster.x - player.x), Math.abs(monster.y - player.y));
+      if (dist === 1) {
+        hp -= monster.atk;
+        message = "A monster hits you for " + monster.atk + "!";
+        if (hp <= 0) { die(); return; }
+        continue;
+      }
+      if (dist <= 7) {
+        const dx = Math.sign(player.x - monster.x);
+        const dy = Math.sign(player.y - monster.y);
+        const candidates = Math.abs(player.x - monster.x) > Math.abs(player.y - monster.y)
+          ? [[dx, 0], [0, dy]]
+          : [[0, dy], [dx, 0]];
+        for (const [mx, my] of candidates) {
+          const tx = monster.x + mx, ty = monster.y + my;
+          if (tx === player.x && ty === player.y) continue;
+          if (tx < 0 || ty < 0 || tx >= N || ty >= N) continue;
+          if (map[idx(tx, ty)]) continue;
+          if (monsters.some((other) => other !== monster && other.x === tx && other.y === ty)) continue;
+          monster.x = tx;
+          monster.y = ty;
+          break;
+        }
+      }
+    }
+    hud();
+    draw();
+  }
+
+  function nextFloor() {
+    depth += 1;
+    hp = Math.min(maxHp, hp + 5);
+    message = "You descend to depth " + depth + ". +5 HP.";
+    generate(depth);
+    hud();
+    draw();
+  }
+
+  function die() {
+    running = false;
+    const score = gold + kills * 10 + depth * 25;
+    const key = "playnix.dungeon-depths.best";
+    const best = Number(localStorage.getItem(key) || 0);
+    if (score > best) localStorage.setItem(key, String(score));
+    overlay.classList.remove("hidden");
+    hintEl.textContent = "You fell on depth " + depth + " — score " + score + ", " + kills + " monsters slain. " + (score >= best ? "New record!" : "Deeper next time?");
+    startBtn.textContent = "Descend again";
+  }
+
+  function start() {
+    depth = 1;
+    hp = 24;
+    maxHp = 24;
+    gold = 0;
+    kills = 0;
+    message = null;
+    generate(1);
+    running = true;
+    paused = false;
+    overlay.classList.add("hidden");
+    hud();
+    resize();
+    draw();
+  }
+
+  window.addEventListener("keydown", (event) => {
+    const map2 = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (!running) start(); else { paused = !paused; draw(); }
+      return;
+    }
+    const delta = map2[event.code];
+    if (delta) { event.preventDefault(); move(delta[0], delta[1]); }
+  });
+
+  document.getElementById("pad").addEventListener("click", (event) => {
+    const dir = event.target.getAttribute("data-dir");
+    const map2 = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    if (dir) move(map2[dir][0], map2[dir][1]);
+  });
+
+  let swipe = null;
+  canvas.addEventListener("touchstart", (event) => {
+    const t = event.changedTouches[0];
+    swipe = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+  canvas.addEventListener("touchend", (event) => {
+    if (!swipe) return;
+    const t = event.changedTouches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
+    else move(0, dy > 0 ? 1 : -1);
+  }, { passive: true });
+
+  startBtn.addEventListener("click", start);
+  document.addEventListener("visibilitychange", () => { if (document.hidden && running) { paused = true; draw(); } });
+  window.addEventListener("message", (event) => {
+    const data = event.data || {};
+    if (data.type === "playnix:pause" && running) { paused = true; draw(); }
+    if (data.type === "playnix:resume" && running) { paused = false; draw(); }
+  });
+  window.addEventListener("resize", resize);
+
+  running = false;
+  depth = 1;
+  hp = 24;
+  maxHp = 24;
+  gold = 0;
+  kills = 0;
+  monsters = [];
+  items = [];
+  generate(1);
+  hud();
+  resize();
+})();
+</script>
+</body>
+</html>

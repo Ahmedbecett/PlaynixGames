@@ -5,6 +5,7 @@ import { getDictionary } from "@/lib/i18n";
 export const adminNav: { href: string; key: string; icon: IconName }[] = [
   { href: "/admin", key: "admin.nav.dashboard", icon: "chart" },
   { href: "/admin/games", key: "admin.nav.games", icon: "gamepad" },
+  { href: "/admin/developers", key: "admin.nav.developers", icon: "code" },
   { href: "/admin/categories", key: "admin.nav.categories", icon: "grid" },
   { href: "/admin/users", key: "admin.nav.users", icon: "users" },
   { href: "/admin/reviews", key: "admin.nav.reviews", icon: "star" },

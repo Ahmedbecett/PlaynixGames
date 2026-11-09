@@ -47,6 +47,7 @@ export type GameCard = {
   playCount: number;
   gameType: GameRow["game_type"];
   featured: boolean;
+  developer: string;
 };
 
 export function toCard(row: GameRow): GameCard {
@@ -63,6 +64,7 @@ export function toCard(row: GameRow): GameCard {
     playCount: Number(row.play_count ?? 0),
     gameType: row.game_type,
     featured: Number(row.featured) === 1,
+    developer: row.developer ?? "",
   };
 }
 
@@ -157,7 +159,7 @@ export async function searchGames(params: SearchParams): Promise<{ games: GameRo
 }
 
 export async function listGamesByFlag(
-  flag: "featured" | "trending" | "new" | "free" | "premium",
+  flag: "featured" | "trending" | "new" | "free" | "premium" | "rating",
   limit = 10,
 ): Promise<GameRow[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 30);
@@ -187,7 +189,20 @@ export async function listGamesByFlag(
         `${SELECT} WHERE g.publication_status = 'published' AND g.pricing_type = 'premium' ORDER BY g.play_count DESC LIMIT ?`,
         [safeLimit],
       );
+    case "rating":
+      return all<GameRow>(
+        `${SELECT} WHERE g.publication_status = 'published' AND g.rating_count > 0 ORDER BY g.rating_avg DESC, g.rating_count DESC LIMIT ?`,
+        [safeLimit],
+      );
   }
+}
+
+export async function listPublishedByCategorySlug(slug: string, limit = 10): Promise<GameRow[]> {
+  const safeLimit = Math.min(Math.max(limit, 1), 30);
+  return all<GameRow>(
+    `${SELECT} WHERE g.publication_status = 'published' AND c.slug = ? ORDER BY g.play_count DESC, g.rating_avg DESC LIMIT ?`,
+    [slug, safeLimit],
+  );
 }
 
 export async function getGameBySlug(slug: string): Promise<GameRow | null> {
@@ -210,11 +225,22 @@ export async function getScreenshots(gameId: string) {
 }
 
 export async function getSimilarGames(game: GameRow, limit = 8): Promise<GameRow[]> {
+  // Built in JS rather than `? IS NULL`: PostgreSQL cannot infer a type for a
+  // bare NULL parameter, and the clause is clearer when it is only present when
+  // a category exists. Same SQL, valid on both engines.
+  const values: (string | number)[] = [game.id];
+  let categoryClause = "";
+  if (game.category_id) {
+    categoryClause = "AND g.category_id = ?";
+    values.push(game.category_id);
+  }
+  values.push(game.play_count, Math.min(limit, 12));
+
   return all<GameRow>(
     `${SELECT} WHERE g.publication_status = 'published' AND g.id != ?
-       AND (g.category_id = ? OR g.category_id IS NULL AND ? IS NULL)
+       ${categoryClause}
      ORDER BY ABS(g.play_count - ?) ASC, g.rating_avg DESC LIMIT ?`,
-    [game.id, game.category_id, game.category_id, game.play_count, Math.min(limit, 12)],
+    values,
   );
 }
 

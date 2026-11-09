@@ -26,7 +26,8 @@ export async function listAdminGames(filters: { query?: string; status?: string 
   const clauses: string[] = ["1 = 1"];
   const values: (string | number)[] = [];
   if (filters.query) {
-    clauses.push("(g.title LIKE ? OR g.slug LIKE ?)");
+    // LOWER() keeps admin search case-insensitive on PostgreSQL too.
+    clauses.push("(LOWER(g.title) LIKE LOWER(?) OR LOWER(g.slug) LIKE LOWER(?))");
     values.push(`%${filters.query}%`, `%${filters.query}%`);
   }
   if (filters.status) {

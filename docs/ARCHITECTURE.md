@@ -14,10 +14,22 @@ Next.js 15 App Router
         ▼
 Data layer (src/lib/db.ts)  ──► PostgreSQL (production) | SQLite (local)
         │
-        └── Telegram Bot API (messages, invoices, webhook)
+        └── Telegram Bot API (messages, invoices, webhook)  ← via playnix-sdk
+              │
+              ▼
+   sdk/  (playnix-sdk)  ── dependencies: none
+     ├── ./          PlaynixClient, Mini App helpers, deep links, errors   (browser-safe)
+     └── ./server    validateInitData, TelegramBot, createWebhookHandler  (Node, node:crypto)
 ```
 
 No separate backend service: server components and route handlers share one deployment and one data layer. Business rules (premium access, payment fulfilment, moderation) live in `src/lib/*` and are only ever executed server-side.
+
+Telegram plumbing is not duplicated: `src/lib/telegram.ts` is a thin adapter over `playnix-sdk/server`
+(it injects `env`, keeps the historical function names and maps SDK errors onto the app's `TelegramError`).
+The webhook verifies its secret with the SDK's constant-time `verifyWebhookSecret`, and `/api/auth/telegram`
+validates `initData` with the SDK's HMAC implementation, so the bot in production and the published package
+run exactly the same code. `npm run sdk:build` runs as part of `prebuild`, and `npm run sdk:check` proves the
+package still matches the deployed API.
 
 ## Request flows
 

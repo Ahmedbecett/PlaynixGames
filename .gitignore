@@ -38,3 +38,7 @@ coverage
 .cookies
 .tmp-out.html
 .tmp-*
+
+# playnix-sdk build output / packed tarballs
+sdk/dist/
+sdk/*.tgz

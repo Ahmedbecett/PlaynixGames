@@ -3,34 +3,11 @@ import { all, one, run } from "./db";
 import { env } from "./env";
 import { botStartAppLink, gameStartParam } from "./telegram-links";
 import { dictionaries, normaliseLocale, type Locale } from "./i18n/shared";
-import { answerPreCheckoutQuery, sendMessage } from "./telegram";
-import { fulfilStarsPayment } from "./payments";
+import { answerCallbackQuery, answerPreCheckoutQuery, sendMessage, sendPhoto, type TelegramUpdate } from "./telegram";
+import { createStarsInvoice, fulfilStarsPayment, listPlans } from "./payments";
 import { nowIso } from "./time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type TgUpdate = {
-  update_id: number;
-  message?: {
-    message_id: number;
-    from?: { id: number; first_name?: string; username?: string; language_code?: string };
-    chat: { id: number };
-    text?: string;
-    successful_payment?: {
-      invoice_payload: string;
-      telegram_payment_charge_id: string;
-      total_amount: number;
-      currency: string;
-    };
-  };
-  callback_query?: {
-    id: string;
-    from: { id: number; first_name?: string; username?: string };
-    data?: string;
-    message?: { chat: { id: number } };
-  };
-  pre_checkout_query?: { id: string; from: { id: number }; invoice_payload: string; total_amount: number; currency: string };
-  successful_payment?: never;
-};
 
 const appLink = () => env.appUrl;
 
@@ -71,9 +48,141 @@ async function resolveUser(from?: { id: number; first_name?: string; username?: 
 function miniAppKeyboard(locale: Locale, path = "/") {
   return {
     inline_keyboard: [
-      [{ text: locale === "ar" ? "🎮 افتح بلاينكس" : locale === "fr" ? "🎮 Ouvrir Playnix" : "🎮 Open Playnix", web_app: { url: `${appLink()}${path}` } }],
+      [
+        {
+          text: {
+            ar: "🎮 افتح بلاينكس",
+            fr: "🎮 Ouvrir Playnix",
+            es: "🎮 Abrir Playnix",
+            ru: "🎮 Открыть Playnix",
+            en: "🎮 Open Playnix",
+          }[locale],
+          web_app: { url: `${appLink()}${path}` },
+        },
+      ],
     ],
   };
+}
+
+/** The welcome / subscription pitch picture, served straight from the deployment. */
+const welcomeImage = () => `${appLink()}/brand/welcome.jpg`;
+
+/**
+ * Picks a string for the active locale. Spanish and Russian fall back to
+ * English until translated, which is why `en` is the default branch.
+ */
+const L = (locale: Locale, ar: string, fr: string, en: string, es?: string, ru?: string) => {
+  if (locale === "ar") return ar;
+  if (locale === "fr") return fr;
+  if (locale === "es") return es ?? en;
+  if (locale === "ru") return ru ?? en;
+  return en;
+};
+
+/**
+ * The subscription is the product: every welcome message puts a Stars purchase
+ * one tap away, and the mini app button stays first because playing is free.
+ */
+function welcomeKeyboard(locale: Locale) {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: L(locale, "🎮 العب الآن — مجانًا", "🎮 Jouer — gratuit", "🎮 Play now — free", "🎮 Jugar — gratis", "🎮 Играть — бесплатно"),
+          web_app: { url: appLink() },
+        },
+      ],
+      [
+        {
+          text: L(locale, "⭐ اشترك في بريميوم", "⭐ S'abonner à Premium", "⭐ Subscribe to Premium", "⭐ Suscribirse a Premium", "⭐ Подписаться на Премиум"),
+          callback_data: "premium:plans",
+        },
+      ],
+      [
+        {
+          text: L(locale, "👑 الألعاب المميزة", "👑 Jeux premium", "👑 Premium games", "👑 Juegos premium", "👑 Премиум-игры"),
+          web_app: { url: `${appLink()}/premium` },
+        },
+      ],
+    ],
+  };
+}
+
+function welcomeCaption(locale: Locale, name?: string) {
+  const hello = name ? L(locale, `، ${name}` , `, ${name}`, `, ${name}`) : "";
+  if (locale === "ar") {
+    return [
+      `<b>أهلًا${hello} في بلاينكس 👋</b>`,
+      "",
+      "١٦ لعبة تعمل فورًا داخل تيليجرام — بلا تحميل ولا تسجيل.",
+      "",
+      "<b>ما الذي يفتحه بريميوم؟</b>",
+      "👑 المكتبة المميزة كاملة: Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 بلا إعلانات داخل الألعاب",
+      "⚡ أولوية الوصول للألعاب الجديدة",
+      "",
+      "الدفع بنجوم تيليجرام (Stars) — إلغاء في أي وقت.",
+      "اضغط <b>اشترك</b> واختر خطتك 👇",
+    ].join("\n");
+  }
+  if (locale === "fr") {
+    return [
+      `<b>Bienvenue${hello} sur Playnix 👋</b>`,
+      "",
+      "16 jeux qui se lancent dans Telegram — sans installation ni compte.",
+      "",
+      "<b>Ce que Premium débloque :</b>",
+      "👑 Toute la collection premium : Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 Aucune publicité dans les jeux",
+      "⚡ Accès anticipé aux nouveautés",
+      "",
+      "Paiement en Stars Telegram — annulable à tout moment.",
+      "Touchez <b>S'abonner</b> et choisissez votre formule 👇",
+    ].join("\n");
+  }
+  if (locale === "es") {
+    return [
+      `<b>Bienvenido${hello} a Playnix 👋</b>`,
+      "",
+      "20 juegos que se abren dentro de Telegram — sin instalar nada.",
+      "",
+      "<b>Qué desbloquea Premium:</b>",
+      "👑 Toda la colección premium: Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 Sin anuncios dentro de los juegos",
+      "⚡ Acceso anticipado a los estrenos",
+      "",
+      "Se paga con Telegram Stars — cancela cuando quieras.",
+      "Toca <b>Suscribirse</b> y elige tu plan 👇",
+    ].join("\n");
+  }
+  if (locale === "ru") {
+    return [
+      `<b>Добро пожаловать${hello} в Playnix 👋</b>`,
+      "",
+      "20 игр, которые запускаются прямо в Telegram — без установки и регистрации.",
+      "",
+      "<b>Что открывает Премиум:</b>",
+      "👑 Вся премиум-коллекция: Tower Guard · Dungeon Depths · Card Blitz",
+      "🚫 Без рекламы внутри игр",
+      "⚡ Ранний доступ к новинкам",
+      "",
+      "Оплата звёздами Telegram — отмена в любой момент.",
+      "Нажмите <b>Подписаться</b> и выберите тариф 👇",
+    ].join("\n");
+  }
+  return [
+    `<b>Welcome${hello} to Playnix 👋</b>`,
+    "",
+    "16 games that launch inside Telegram — no installs, no sign-up.",
+    "",
+    "<b>What Premium unlocks:</b>",
+    "👑 The full premium collection: Tower Guard · Dungeon Depths · Card Blitz",
+    "🚫 No ads inside the games",
+    "⚡ Early access to new releases",
+    "",
+    "Paid with Telegram Stars — cancel anytime.",
+    "Tap <b>Subscribe</b> and pick a plan 👇",
+  ].join("\n");
 }
 
 function gameLine(title: string, slug: string, pricing: string) {
@@ -99,7 +208,69 @@ async function listGames(kind: "popular" | "new" | "search", query = "", limit =
   );
 }
 
-export async function handleUpdate(update: TgUpdate): Promise<void> {
+/**
+ * Branded greeting: the welcome picture plus the subscription pitch.
+ * Falls back to a plain text message if Telegram refuses the photo (bad URL,
+ * file too large, …) so a user never ends up with silence.
+ */
+async function sendWelcome(chatId: number, locale: Locale, firstName?: string) {
+  const caption = welcomeCaption(locale, firstName);
+  try {
+    await sendPhoto(chatId, welcomeImage(), caption, { replyMarkup: welcomeKeyboard(locale) });
+  } catch (error) {
+    console.error("[telegram] welcome photo failed, falling back to text", error);
+    await sendMessage(chatId, caption, { replyMarkup: welcomeKeyboard(locale) });
+  }
+}
+
+/**
+ * Plan picker. Tapping a plan mints a Stars invoice and replies with a pay
+ * button, so a purchase never requires opening the mini app.
+ */
+async function sendPlanPicker(chatId: number, locale: Locale, user: { id: string }) {
+  const plans = await listPlans();
+  if (plans.length === 0) {
+    await sendMessage(chatId, L(locale, "لا توجد خطط متاحة حاليًا.", "Aucune formule disponible.", "No plans are available right now."), {
+      replyMarkup: miniAppKeyboard(locale, "/premium"),
+    });
+    return;
+  }
+
+  const heading = L(locale, "⭐ <b>اختر خطتك</b>", "⭐ <b>Choisissez votre formule</b>", "⭐ <b>Choose your plan</b>");
+  const lines = plans.map((plan) => {
+    const name = (locale === "ar" && plan.name_ar) || (locale === "fr" && plan.name_fr) || plan.name;
+    const days = Number(plan.duration_days);
+    const months = Math.round(days / 30);
+    const badge = months >= 12 ? "🏆" : months >= 3 ? "🔥" : "⭐";
+    const perMonth = months > 0 ? Math.round(Number(plan.price) / months) : Number(plan.price);
+    return `${badge} <b>${name}</b> — <b>${Number(plan.price)}</b> ⭐${months > 1 ? ` · ≈${perMonth} ⭐/` + L(locale, "شهر", "mois", "month") : ""}`;
+  });
+
+  const footer = L(
+    locale,
+    "الدفع بنجوم تيليجرام. الاشتراك يفتح كل الألعاب المميزة فورًا ويُلغى بمجرد انتهاء المدة.",
+    "Paiement en Stars Telegram. L'abonnement débloque tous les jeux premium immédiatement.",
+    "Paid with Telegram Stars. The subscription unlocks every premium game immediately.",
+  );
+
+  const keyboard = {
+    inline_keyboard: [
+      ...plans.map((plan) => [
+        {
+          text: `${L(locale, "اشترك", "S'abonner", "Subscribe")} · ${plan.name_ar && locale === "ar" ? plan.name_ar : locale === "fr" && plan.name_fr ? plan.name_fr : plan.name}`,
+          callback_data: `buy:${plan.id}`,
+        },
+      ]),
+      [{ text: L(locale, "🎮 العب مجانًا الآن", "🎮 Jouer gratuitement", "🎮 Play free now"), web_app: { url: appLink() } }],
+    ],
+  };
+
+  await sendMessage(chatId, `${heading}\n\n${lines.join("\n")}\n\n${footer}`, { replyMarkup: keyboard });
+  // `user` is only needed for the invoice, which is minted on the callback.
+  void user;
+}
+
+export async function handleUpdate(update: TelegramUpdate): Promise<void> {
   // idempotency
   try {
     await run("INSERT INTO telegram_updates (update_id, processed_at) VALUES (?, ?)", [String(update.update_id), nowIso()]);
@@ -119,6 +290,61 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     const chatId = callback.message?.chat.id;
     const user = await resolveUser(callback.from);
     if (!chatId || !user) return;
+    const cbLocale = normaliseLocale(user.language);
+
+    if (callback.data === "premium:plans") {
+      await answerCallbackQuery(callback.id);
+      await sendPlanPicker(chatId, cbLocale, user);
+      return;
+    }
+
+    if (callback.data?.startsWith("buy:")) {
+      const planId = callback.data.slice(4);
+      const plans = await listPlans();
+      const plan = plans.find((item) => item.id === planId);
+      if (!plan) {
+        await answerCallbackQuery(callback.id, L(cbLocale, "هذه الخطة لم تعد متاحة.", "Cette formule n'est plus disponible.", "That plan is no longer available."), { alert: true });
+        await sendPlanPicker(chatId, cbLocale, user);
+        return;
+      }
+      const name = (cbLocale === "ar" && plan.name_ar) || (cbLocale === "fr" && plan.name_fr) || plan.name;
+      try {
+        const { invoiceLink } = await createStarsInvoice(user.id, plan);
+        await answerCallbackQuery(callback.id);
+        await sendMessage(
+          chatId,
+          [
+            `⭐ <b>${name}</b>`,
+            "",
+            `${L(cbLocale, "السعر", "Prix", "Price")}: <b>${Number(plan.price)} ⭐</b> · ${Number(plan.duration_days)} ${L(cbLocale, "يوم", "jours", "days")}`,
+            "",
+            L(
+              cbLocale,
+              "اضغط زر الدفع بالأسفل لإتمام الاشتراك بنجوم تيليجرام. يُفتح بريميوم تلقائيًا بعد الدفع.",
+              "Touchez le bouton de paiement ci-dessous pour régler en Stars Telegram. Premium s'active automatiquement.",
+              "Tap the pay button below to complete the purchase with Telegram Stars. Premium activates automatically.",
+            ),
+          ].join("\n"),
+          {
+            replyMarkup: {
+              inline_keyboard: [
+                [{ text: `⭐ ${L(cbLocale, "ادفع", "Payer", "Pay")} ${Number(plan.price)} Stars`, url: invoiceLink }],
+                [{ text: L(cbLocale, "خطط أخرى", "Autres formules", "Other plans"), callback_data: "premium:plans" }],
+              ],
+            },
+          },
+        );
+      } catch (error) {
+        console.error("[telegram] invoice creation failed", error);
+        await answerCallbackQuery(
+          callback.id,
+          L(cbLocale, "تعذّر إنشاء الفاتورة، جرّب لاحقًا.", "Facture impossible pour l'instant.", "Could not create the invoice, try again."),
+          { alert: true },
+        );
+      }
+      return;
+    }
+
     if (callback.data?.startsWith("lang:")) {
       const locale = normaliseLocale(callback.data.slice(5));
       await run("UPDATE users SET language = ?, updated_at = ? WHERE id = ?", [locale, nowIso(), user.id]);
@@ -163,15 +389,33 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
 
   switch (command) {
     case "/start": {
-      const welcome =
-        locale === "ar"
-          ? `<b>مرحبًا بك في بلاينكس!</b>\n\nاكتشف آلاف الألعاب واستكشف تجارب جديدة والعب فورًا داخل تيليجرام.\n\nابحث عن ألعابك المفضلة وابدأ اللعب.`
-          : locale === "fr"
-            ? `<b>Bienvenue sur Playnix !</b>\n\nDécouvrez des milliers de jeux, explorez de nouvelles expériences et jouez instantanément dans Telegram.\n\nCherchez vos jeux préférés et commencez à jouer.`
-            : `<b>Welcome to Playnix!</b>\n\nDiscover thousands of games, explore new experiences, and play instantly inside Telegram.\n\nSearch your favorite games and start playing.`;
-      await sendMessage(chatId, welcome, { replyMarkup: miniAppKeyboard(locale) });
+      const payload = argument.trim();
+      const firstName = message.from?.first_name;
+
+      // Deep links still land on the right screen, but the greeting is always
+      // the branded photo with the subscription pitch attached.
+      if (payload.startsWith("game_") || payload.startsWith("play_")) {
+        const slug = payload.replace(/^(game_|play_)/, "");
+        if (slug) {
+          await sendMessage(chatId, L(locale, "🎮 جاهزة للّعب:", "🎮 Prêt à jouer :", "🎮 Ready to play:") + ` <b>${slug}</b>`, {
+            replyMarkup: miniAppKeyboard(locale, `/game/${slug}`),
+          });
+          return;
+        }
+      }
+      if (payload === "premium" || payload === "subscribe" || payload === "stars") {
+        await sendWelcome(chatId, locale, firstName);
+        await sendPlanPicker(chatId, locale, user);
+        return;
+      }
+      await sendWelcome(chatId, locale, firstName);
       return;
     }
+    case "/subscribe":
+    case "/stars":
+      await sendWelcome(chatId, locale, message.from?.first_name);
+      await sendPlanPicker(chatId, locale, user);
+      return;
     case "/games":
       await sendMessage(chatId, text("categories.title", locale), { replyMarkup: miniAppKeyboard(locale, "/categories") });
       return;
@@ -210,9 +454,8 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
       return;
     }
     case "/premium":
-      await sendMessage(chatId, `<b>${text("premium.title", locale)}</b>\n\n${text("premium.subtitle", locale)}`, {
-        replyMarkup: miniAppKeyboard(locale, "/premium"),
-      });
+      await sendWelcome(chatId, locale, message.from?.first_name);
+      await sendPlanPicker(chatId, locale, user);
       return;
     case "/profile":
       await sendMessage(chatId, text("profile.title", locale), { replyMarkup: miniAppKeyboard(locale, "/profile") });
@@ -226,6 +469,10 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
               { text: "English", callback_data: "lang:en" },
               { text: "العربية", callback_data: "lang:ar" },
               { text: "Français", callback_data: "lang:fr" },
+            ],
+            [
+              { text: "Español", callback_data: "lang:es" },
+              { text: "Русский", callback_data: "lang:ru" },
             ],
           ],
         },
@@ -243,6 +490,7 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
           "/popular · " + text("home.trending", locale) + "\n" +
           "/new · " + text("home.newGames", locale) + "\n" +
           "/premium · " + text("common.premium", locale) + "\n" +
+          "/subscribe · " + L(locale, "اشترك بنجوم تيليجرام", "s'abonner avec des Stars", "subscribe with Stars") + "\n" +
           "/profile · " + text("profile.title", locale) + "\n" +
           "/language · " + text("common.language", locale),
         { replyMarkup: miniAppKeyboard(locale) },

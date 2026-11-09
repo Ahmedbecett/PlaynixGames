@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
 import { all, one } from "@/lib/db";
-import { categoryDescription, categoryName, listCategoriesWithCounts, searchGames, toCard, type CategoryRow } from "@/lib/games";
+import { categoryDescription, categoryName, listCategoriesWithCounts, searchGames, toCard, type CategoryRow, type SortKey } from "@/lib/games";
 import { getDictionary, formatNumber } from "@/lib/i18n";
+import { breadcrumbNode, buildMetadata, itemListNode, jsonLdGraph } from "@/lib/seo";
 import { CategoryChips } from "@/components/CategoryChips";
 import { GameCard } from "@/components/GameCard";
 import { Icon } from "@/components/Icons";
@@ -13,19 +14,45 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const category = await one<CategoryRow>("SELECT * FROM categories WHERE slug = ? AND is_active = 1", [slug]);
-  return { title: category?.name ?? "Category" };
+  const [category, { locale }] = await Promise.all([
+    one<CategoryRow>("SELECT * FROM categories WHERE slug = ? AND is_active = 1", [slug]),
+    getDictionary(),
+  ]);
+  if (!category) return { title: "Category", robots: { index: false, follow: true } };
+
+  const name = categoryName(category, locale);
+  const description =
+    categoryDescription(category, locale) ||
+    `Play the best ${name} games instantly inside Telegram — free browser games, no downloads.`;
+
+  return buildMetadata({
+    title: `${name} games`,
+    description,
+    path: `/category/${slug}`,
+    locale,
+    keywords: [`${name} games`, `${name} Telegram games`, "free online games", name],
+  });
 }
 
-export default async function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
+const SORTS: SortKey[] = ["popular", "newest", "rating"];
+
+export default async function CategoryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ sort?: string }>;
+}) {
   const { slug } = await params;
+  const { sort: sortParam } = await searchParams;
+  const sort: SortKey = SORTS.includes(sortParam as SortKey) ? (sortParam as SortKey) : "popular";
   const category = await one<CategoryRow>("SELECT * FROM categories WHERE slug = ? AND is_active = 1", [slug]);
   if (!category) notFound();
 
   const { dict, locale } = await getDictionary();
   const user = await getCurrentUser();
   const [results, categories, favorites, premiumStatus, premiumGames] = await Promise.all([
-    searchGames({ category: slug, sort: "popular", limit: 48 }),
+    searchGames({ category: slug, sort, limit: 48 }),
     listCategoriesWithCounts(locale),
     user ? all<{ game_id: string }>("SELECT game_id FROM favorites WHERE user_id = ?", [user.id]) : Promise.resolve([]),
     getPremiumStatus(),
@@ -37,6 +64,23 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
 
   return (
     <div className="fade-up">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdGraph([
+            breadcrumbNode([
+              { name: dict["nav.home"], path: "/" },
+              { name: dict["categories.title"], path: "/categories" },
+              { name: categoryName(category, locale), path: `/category/${slug}` },
+            ]),
+            itemListNode(
+              `${categoryName(category, locale)} games`,
+              `/category/${slug}`,
+              results.games.map((game) => ({ name: game.title, path: `/game/${game.slug}` })),
+            ),
+          ]),
+        }}
+      />
       <div className="mb-4 flex items-center gap-3">
         <span className="grid h-12 w-12 place-items-center rounded-xl text-2xl" style={{ background: "rgba(139,92,246,.16)" }}>
           {category.icon ?? "🎮"}
@@ -49,7 +93,20 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         </div>
       </div>
 
-      <CategoryChips categories={categories} activeSlug={slug} />
+      <CategoryChips categories={categories} activeSlug={slug} allLabel={dict["common.all"]} />
+
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {SORTS.map((key) => (
+          <Link
+            key={key}
+            href={`/category/${slug}?sort=${key}`}
+            className="chip"
+            data-active={sort === key}
+          >
+            {dict[`search.sort.${key}`]}
+          </Link>
+        ))}
+      </div>
 
       {results.games.length === 0 ? (
         <div className="rounded-2xl border border-[rgba(139,92,246,.25)] p-6 text-center" style={{ background: "rgba(23,30,48,.6)" }}>

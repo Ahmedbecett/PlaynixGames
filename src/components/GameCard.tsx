@@ -58,12 +58,12 @@ export function GameCard({
 
   return (
     <div
-      className={`game-card card-glow hover-lift press ${variant === "row" ? "w-[190px]" : "w-full"}`}
+      className={`game-card card-glow hover-lift press ${variant === "row" ? "w-[210px]" : "w-full"}`}
       style={{ display: "flex", flexDirection: "column" }}
     >
       <Link href={`/game/${game.slug}`} className="game-card__cover block" aria-label={game.title}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cover} alt="" loading="lazy" decoding="async" />
+        <img src={cover} alt={`${game.title} cover`} loading="lazy" decoding="async" />
         <span className={`game-card__badge ${game.pricingType === "premium" ? "badge-premium" : "badge-free"}`}>
           {game.pricingType === "premium" ? (
             <>
@@ -113,18 +113,21 @@ export function GameCard({
           {game.title}
         </Link>
         <div className="flex items-center gap-2 text-[11px] text-[var(--color-muted)]">
-          <span className="truncate">{game.category}</span>
+          <span className="truncate">{game.category || game.developer}</span>
           {game.ratingCount > 0 && (
-            <span className="flex items-center gap-1" aria-label={t("common.rating")}>
+            <span className="flex shrink-0 items-center gap-1" aria-label={t("common.rating")}>
               <Icon name="star" size={11} filled style={{ color: "#FFB35C" }} />
               {game.ratingAvg.toFixed(1)}
             </span>
           )}
         </div>
+        {game.developer ? (
+          <p className="truncate text-[10px] text-[var(--color-muted)]">{game.developer}</p>
+        ) : null}
         <p className="line-clamp-2 text-[11.5px] leading-snug text-[var(--color-muted)]">{game.shortDescription}</p>
-        <div className="mt-auto flex items-center justify-between pt-2">
-          <span className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
-            {formatNumber(game.playCount)} · {game.gameType}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+          <span className="truncate text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
+            {formatNumber(game.playCount)} {t("home.plays")} · {game.gameType === "html5" ? "HTML5" : game.gameType}
           </span>
           <Link href={`/play/${game.slug}`} className="btn btn-sm" onClick={(event) => event.stopPropagation()}>
             <Icon name="play" size={13} filled />

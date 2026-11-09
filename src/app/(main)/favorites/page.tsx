@@ -8,7 +8,7 @@ import { GameCard } from "@/components/GameCard";
 import { Icon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Favorites" };
+export const metadata: Metadata = { title: "Favorites", robots: { index: false, follow: true } };
 
 export default async function FavoritesPage() {
   const { dict } = await getDictionary();

@@ -2,12 +2,20 @@ import Link from "next/link";
 
 export type CategoryChipData = { slug: string; name: string; icon: string; gameCount: number };
 
-export function CategoryChips({ categories, activeSlug }: { categories: CategoryChipData[]; activeSlug?: string }) {
+export function CategoryChips({
+  categories,
+  activeSlug,
+  allLabel,
+}: {
+  categories: CategoryChipData[];
+  activeSlug?: string;
+  allLabel?: string;
+}) {
   if (categories.length === 0) return null;
   return (
-    <div className="scroll-x -mx-1 mb-6 px-1">
+    <div className="scroll-x -mx-1 mb-4 px-1">
       <Link href="/categories" className="chip" data-active={!activeSlug}>
-        ✨ All
+        {allLabel ?? "All"}
       </Link>
       {categories.map((category) => (
         <Link

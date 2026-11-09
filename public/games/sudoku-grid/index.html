@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Sudoku Grid</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:10px; }
+  header { width:100%; max-width:440px; display:flex; justify-content:space-between; font-size:12px; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--muted); padding:0 2px; }
+  header b { color:var(--text); font-variant-numeric:tabular-nums; }
+  #grid { width:min(92vw,440px,calc(100vh - 260px)); aspect-ratio:1; display:grid;
+    grid-template-columns:repeat(9,1fr); grid-template-rows:repeat(9,1fr);
+    background:#0d1220; border-radius:16px; padding:4px; gap:2px;
+    box-shadow:0 0 0 1px rgba(139,92,246,.3),0 18px 60px rgba(0,0,0,.6); }
+  .cell { display:grid; place-items:center; border-radius:6px; background:#151c2c; color:var(--text);
+    font-size:clamp(13px,3.4vw,20px); font-weight:600; font-variant-numeric:tabular-nums; }
+  .cell.given { background:#101726; color:#8FA2C8; }
+  .cell.sel { outline:2px solid var(--accent); outline-offset:-2px; background:#241a12; }
+  .cell.peer { background:#18213a; }
+  .cell.same { background:#1b2436; color:var(--cyan); }
+  .cell.bad { color:#EF4444; }
+  .cell.hinted { color:var(--cyan); }
+  .cell[data-v=""] { color:transparent; }
+  #pad { width:min(92vw,440px); display:grid; grid-template-columns:repeat(9,1fr); gap:5px; }
+  #pad button { padding:11px 0; border-radius:10px; border:1px solid rgba(139,92,246,.3);
+    background:rgba(23,30,48,.94); color:var(--text); font-size:16px; font-weight:700; }
+  #pad button:active { background:rgba(255,122,24,.28); }
+  #tools { width:min(92vw,440px); display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  #tools button { padding:11px 0; border-radius:12px; border:1px solid rgba(139,92,246,.3);
+    background:rgba(23,30,48,.94); color:var(--text); font-size:13px; font-weight:700; }
+  #overlay { position:fixed; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.88); backdrop-filter:blur(6px); padding:16px; }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card); border:1px solid rgba(34,211,238,.25); max-width:330px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:13px; line-height:1.6; margin:0 0 14px; }
+  .panel .row { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:10px; }
+  .panel .row button.level { padding:10px; border-radius:12px; border:1px solid rgba(139,92,246,.35);
+    background:rgba(23,30,48,.9); color:var(--text); font-weight:700; font-size:13px; }
+  .panel .row button.level.on { border-color:var(--accent); background:rgba(255,122,24,.2); }
+  .panel button.go { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px; color:#0b0f18;
+    background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span>Level <b id="level">Medium</b></span><span>Mistakes <b id="mistakes">0</b></span><span>Time <b id="timer">0:00</b></span><span>Hints <b id="hints">3</b></span></header>
+  <div id="grid" role="grid" aria-label="Sudoku board"></div>
+  <div id="pad"></div>
+  <div id="tools">
+    <button id="erase">⌫ Erase</button>
+    <button id="hint">💡 Hint</button>
+    <button id="newGame">New puzzle</button>
+  </div>
+</div>
+<div id="overlay">
+  <div class="panel">
+    <h1>Sudoku Grid</h1>
+    <p id="hintText">Fill every row, column and 3×3 box with 1–9. No guessing needed — every puzzle has one solution.</p>
+    <div class="row">
+      <button class="level" data-level="easy">Easy</button>
+      <button class="level on" data-level="medium">Medium</button>
+      <button class="level" data-level="hard">Hard</button>
+      <button class="level" data-level="expert">Expert</button>
+    </div>
+    <button class="go" id="startBtn">Start puzzle</button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const gridEl = document.getElementById("grid");
+  const padEl = document.getElementById("pad");
+  const overlay = document.getElementById("overlay");
+  const startBtn = document.getElementById("startBtn");
+  const hintTextEl = document.getElementById("hintText");
+  const levelEl = document.getElementById("level");
+  const mistakesEl = document.getElementById("mistakes");
+  const timerEl = document.getElementById("timer");
+  const hintsEl = document.getElementById("hints");
+
+  const CLUES = { easy: 42, medium: 34, hard: 28, expert: 24 };
+  const LABEL = { easy: "Easy", medium: "Medium", hard: "Hard", expert: "Expert" };
+
+  let solution, puzzle, cells, selected, mistakes, hints, difficulty, startedAt, timerId, hintsLeft, solved;
+
+  function shuffled(list) {
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i -= 1) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+    return out;
+  }
+
+  function canPlace(board, index, value) {
+    const row = Math.floor(index / 9), col = index % 9;
+    for (let i = 0; i < 9; i += 1) {
+      if (board[row * 9 + i] === value) return false;
+      if (board[i * 9 + col] === value) return false;
+    }
+    const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+    for (let r = 0; r < 3; r += 1) for (let c = 0; c < 3; c += 1) {
+      if (board[(br + r) * 9 + (bc + c)] === value) return false;
+    }
+    return true;
+  }
+
+  function solve(board, index = 0) {
+    if (index === 81) return true;
+    if (board[index]) return solve(board, index + 1);
+    for (const value of shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
+      if (!canPlace(board, index, value)) continue;
+      board[index] = value;
+      if (solve(board, index + 1)) return true;
+      board[index] = 0;
+    }
+    return false;
+  }
+
+  function countSolutions(board, limit = 2) {
+    const work = board.slice();
+    let found = 0;
+    function walk(index) {
+      if (found >= limit) return;
+      if (index === 81) { found += 1; return; }
+      if (work[index]) { walk(index + 1); return; }
+      for (let value = 1; value <= 9; value += 1) {
+        if (!canPlace(work, index, value)) continue;
+        work[index] = value;
+        walk(index + 1);
+        work[index] = 0;
+        if (found >= limit) return;
+      }
+    }
+    walk(0);
+    return found;
+  }
+
+  function buildPuzzle(level) {
+    const board = new Array(81).fill(0);
+    solve(board);
+    const full = board.slice();
+    const targetClues = CLUES[level] ?? 34;
+    const order = shuffled(Array.from({ length: 81 }, (_, i) => i));
+    let clues = 81;
+    const deadline = performance.now() + 2500;
+    for (const index of order) {
+      if (clues <= targetClues) break;
+      if (performance.now() > deadline) break;
+      const backup = board[index];
+      board[index] = 0;
+      if (countSolutions(board) !== 1) {
+        board[index] = backup;
+      } else {
+        clues -= 1;
+      }
+    }
+    return { full, puzzle: board };
+  }
+
+  function render() {
+    gridEl.innerHTML = "";
+    cells = [];
+    for (let index = 0; index < 81; index += 1) {
+      const button = document.createElement("button");
+      button.className = "cell";
+      button.dataset.index = String(index);
+      button.setAttribute("role", "gridcell");
+      gridEl.appendChild(button);
+      cells.push(button);
+    }
+    paint();
+  }
+
+  function paint() {
+    const board = puzzle;
+    const selValue = selected != null ? board[selected] : 0;
+    for (let index = 0; index < 81; index += 1) {
+      const cell = cells[index];
+      const value = board[index];
+      const given = solution[index] && puzzleGiven[index];
+      cell.textContent = value ? String(value) : "";
+      cell.dataset.v = value ? String(value) : "";
+      cell.className = "cell";
+      if (given) cell.classList.add("given");
+      if (selected === index) cell.classList.add("sel");
+      else if (selected != null) {
+        const sameRow = Math.floor(selected / 9) === Math.floor(index / 9);
+        const sameCol = selected % 9 === index % 9;
+        const sameBox = Math.floor(selected / 27) === Math.floor(index / 27) && Math.floor((selected % 9) / 3) === Math.floor((index % 9) / 3);
+        if (sameRow || sameCol || sameBox) cell.classList.add("peer");
+        if (selValue && value === selValue) cell.classList.add("same");
+      }
+      if (value && !given && value !== solution[index]) cell.classList.add("bad");
+      if (hintedSet.has(index)) cell.classList.add("hinted");
+    }
+    levelEl.textContent = LABEL[difficulty];
+    mistakesEl.textContent = String(mistakes);
+    hintsEl.textContent = String(hintsLeft);
+  }
+
+  let puzzleGiven, hintedSet;
+
+  function startGame() {
+    const built = buildPuzzle(difficulty);
+    solution = built.full;
+    puzzle = built.puzzle;
+    puzzleGiven = puzzle.map((value) => Boolean(value));
+    hintedSet = new Set();
+    selected = null;
+    mistakes = 0;
+    hintsLeft = 3;
+    solved = false;
+    render();
+    overlay.classList.add("hidden");
+    startedAt = Date.now();
+    clearInterval(timerId);
+    timerId = setInterval(() => {
+      const seconds = Math.floor((Date.now() - startedAt) / 1000);
+      timerEl.textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+    }, 500);
+    timerEl.textContent = "0:00";
+  }
+
+  function place(value) {
+    if (selected == null || solved) return;
+    if (puzzleGiven[selected]) return;
+    puzzle[selected] = value;
+    if (value && value !== solution[selected]) {
+      mistakes += 1;
+      if (mistakes >= 5) { finish(false); return; }
+    } else if (value) {
+      hintedSet.delete(selected);
+    }
+    paint();
+    checkWin();
+  }
+
+  function checkWin() {
+    for (let index = 0; index < 81; index += 1) if (puzzle[index] !== solution[index]) return;
+    finish(true);
+  }
+
+  function finish(won) {
+    solved = won;
+    clearInterval(timerId);
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+    overlay.classList.remove("hidden");
+    hintTextEl.textContent = won
+      ? "Solved " + LABEL[difficulty] + " in " + seconds + "s with " + mistakes + " mistake" + (mistakes === 1 ? "" : "s") + "."
+      : "Five mistakes — the puzzle is over. Every row, column and box needs 1–9 without repeats.";
+    startBtn.textContent = won ? "Next puzzle" : "Try again";
+    const key = "playnix.sudoku-grid.best";
+    const record = JSON.parse(localStorage.getItem(key) || "{}");
+    const previous = record[difficulty];
+    if (won && (!previous || seconds < previous)) {
+      record[difficulty] = seconds;
+      localStorage.setItem(key, JSON.stringify(record));
+    }
+  }
+
+  gridEl.addEventListener("click", (event) => {
+    const cell = event.target.closest(".cell");
+    if (!cell || solved) return;
+    selected = Number(cell.dataset.index);
+    paint();
+  });
+
+  for (let value = 1; value <= 9; value += 1) {
+    const button = document.createElement("button");
+    button.textContent = String(value);
+    button.addEventListener("click", () => place(value));
+    padEl.appendChild(button);
+  }
+
+  document.getElementById("erase").addEventListener("click", () => place(0));
+  document.getElementById("hint").addEventListener("click", () => {
+    if (solved || hintsLeft <= 0) return;
+    const empties = [];
+    for (let index = 0; index < 81; index += 1) {
+      if (puzzle[index] !== solution[index]) empties.push(index);
+    }
+    if (!empties.length) return;
+    const pick = empties[Math.floor(Math.random() * empties.length)];
+    puzzle[pick] = solution[pick];
+    hintedSet.add(pick);
+    hintsLeft -= 1;
+    selected = pick;
+    paint();
+    checkWin();
+  });
+  document.getElementById("newGame").addEventListener("click", () => {
+    overlay.classList.remove("hidden");
+    startBtn.textContent = "Start puzzle";
+    hintTextEl.textContent = "Pick a difficulty — the puzzle is generated with exactly one solution.";
+    clearInterval(timerId);
+  });
+
+  overlay.addEventListener("click", (event) => {
+    const levelButton = event.target.closest("button.level");
+    if (!levelButton) return;
+    difficulty = levelButton.dataset.level;
+    document.querySelectorAll("button.level").forEach((button) => button.classList.toggle("on", button === levelButton));
+  });
+
+  startBtn.addEventListener("click", startGame);
+
+  window.addEventListener("keydown", (event) => {
+    if (/^[1-9]$/.test(event.key)) { place(Number(event.key)); return; }
+    if (event.key === "Backspace" || event.key === "Delete" || event.key === "0") { event.preventDefault(); place(0); return; }
+    if (!selected) return;
+    const row = Math.floor(selected / 9), col = selected % 9;
+    const moves = { ArrowUp: [row - 1, col], ArrowDown: [row + 1, col], ArrowLeft: [row, col - 1], ArrowRight: [row, col + 1] };
+    const move = moves[event.key];
+    if (!move) return;
+    event.preventDefault();
+    const [nr, nc] = move;
+    if (nr < 0 || nc < 0 || nr > 8 || nc > 8) return;
+    selected = nr * 9 + nc;
+    paint();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearInterval(timerId);
+    else if (!solved && startedAt && overlay.classList.contains("hidden")) {
+      timerId = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        timerEl.textContent = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+      }, 500);
+    }
+  });
+
+  difficulty = "medium";
+  solution = new Array(81).fill(0);
+  puzzle = new Array(81).fill(0);
+  puzzleGiven = puzzle.map(() => false);
+  hintedSet = new Set();
+  mistakes = 0;
+  hintsLeft = 3;
+  render();
+})();
+</script>
+</body>
+</html>
