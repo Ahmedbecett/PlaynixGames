@@ -63,7 +63,7 @@ export function GameCard({
     >
       <Link href={`/game/${game.slug}`} className="game-card__cover block" aria-label={game.title}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cover} alt="" loading="lazy" decoding="async" />
+        <img src={cover} alt={`${game.title} cover`} loading="lazy" decoding="async" />
         <span className={`game-card__badge ${game.pricingType === "premium" ? "badge-premium" : "badge-free"}`}>
           {game.pricingType === "premium" ? (
             <>

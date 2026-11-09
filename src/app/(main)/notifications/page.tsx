@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icons";
 import { MarkNotificationsRead } from "@/components/MarkNotificationsRead";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Notifications" };
+export const metadata: Metadata = { title: "Notifications", robots: { index: false, follow: true } };
 
 type NotificationRow = {
   id: string;

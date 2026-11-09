@@ -10,9 +10,34 @@ function optional(name: string): string | undefined {
   return trimmed.length ? trimmed : undefined;
 }
 
+/**
+ * Absolute public origin of the site (no trailing slash), used for canonical
+ * URLs, sitemap entries, Open Graph images and Telegram deep links.
+ *
+ * Order: NEXT_PUBLIC_APP_URL → Vercel production domain → current Vercel
+ * deployment → localhost.
+ */
+function resolveSiteUrl(): string {
+  const candidates = [
+    optional("NEXT_PUBLIC_APP_URL"),
+    optional("VERCEL_PROJECT_PRODUCTION_URL"),
+    optional("VERCEL_URL"),
+  ];
+  const found = candidates.find((value) => Boolean(value)) ?? "http://localhost:3000";
+  const withScheme = /^https?:\/\//i.test(found) ? found : `https://${found}`;
+  return withScheme.replace(/\/+$/, "");
+}
+
 export const env = {
+  get siteUrl(): string {
+    return resolveSiteUrl();
+  },
   get appUrl(): string {
-    return (optional("NEXT_PUBLIC_APP_URL") ?? "http://localhost:3000").replace(/\/+$/, "");
+    return resolveSiteUrl();
+  },
+  /** Google Search Console "HTML tag" verification token, if used. */
+  get googleSiteVerification(): string | undefined {
+    return optional("NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION");
   },
   get botToken(): string | undefined {
     return optional("TELEGRAM_BOT_TOKEN");

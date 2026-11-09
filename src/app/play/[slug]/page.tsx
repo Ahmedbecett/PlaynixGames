@@ -9,7 +9,11 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const game = await getPublishedGameBySlug(slug);
-  return { title: game ? `Playing ${game.title}` : "Play" };
+  // The iframe shell is a duplicate of /game/<slug> — keep it out of the index.
+  return {
+    title: game ? `Playing ${game.title}` : "Play",
+    robots: { index: false, follow: false },
+  };
 }
 
 export default async function PlayPage({ params }: { params: Promise<{ slug: string }> }) {

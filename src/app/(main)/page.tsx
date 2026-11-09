@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
 import { all, count, one } from "@/lib/db";
@@ -10,11 +11,28 @@ import {
 } from "@/lib/games";
 import { getDictionary, formatNumber } from "@/lib/i18n";
 import { getContinuePlaying, getRecommendations } from "@/lib/recommend";
+import { buildMetadata, SITE_NAME, SITE_TAGLINE, SITE_DESCRIPTION } from "@/lib/seo";
 import { CategoryChips } from "@/components/CategoryChips";
 import { GameRow, SectionHeader } from "@/components/GameRow";
 import { Icon } from "@/components/Icons";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { dict, locale } = await getDictionary();
+  const title = `${dict["brand.name"] ?? SITE_NAME} — ${SITE_TAGLINE}`;
+  return {
+    ...buildMetadata({
+      title,
+      description: dict["home.heroSubtitle"] ?? SITE_DESCRIPTION,
+      path: "/",
+      locale,
+      keywords: ["Playnix", "Telegram games", "instant play", "ألعاب تيليجرام", "jeux Telegram"],
+    }),
+    // Absolute title: the home page must not get the "· Playnix" suffix twice.
+    title: { absolute: title },
+  };
+}
 
 type Banner = {
   id: string;
@@ -92,7 +110,7 @@ export default async function HomePage() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={hero?.image_url || daily?.cover_url || "/covers/placeholder.svg"}
-          alt=""
+          alt={daily?.title ?? t("home.heroTitle")}
           className="absolute inset-0 h-full w-full object-cover"
           style={{ filter: "saturate(1.05)" }}
         />
@@ -179,7 +197,7 @@ export default async function HomePage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={daily.cover_url || "/covers/placeholder.svg"}
-                alt=""
+                alt={`${daily.title} cover`}
                 className="h-44 w-full object-cover sm:h-full"
                 loading="lazy"
               />

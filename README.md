@@ -47,7 +47,7 @@ npm run build && npm start
 npm run bot:webhook            # registers https://<APP_URL>/api/telegram/webhook
 ```
 
-Arabic walkthrough: [`docs/SETUP_AR.md`](docs/SETUP_AR.md). Full steps in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); bot wiring (BotFather, webhook, menu button, deep links, tunnel) in [`docs/BOT_SETUP.md`](docs/BOT_SETUP.md).
+Arabic walkthrough: [`docs/SETUP_AR.md`](docs/SETUP_AR.md). Full steps in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md); bot wiring (BotFather, webhook, menu button, deep links, tunnel) in [`docs/BOT_SETUP.md`](docs/BOT_SETUP.md). Search-engine setup (Google verification, `robots.txt`, `sitemap.xml`, rich results) in [`docs/SEO_AR.md`](docs/SEO_AR.md).
 
 ---
 
@@ -74,7 +74,7 @@ src/app/admin/             admin dashboard pages
 src/app/api/               REST endpoints (games, users, payments, admin, telegram webhook)
 src/lib/                   db, auth, telegram, payments, bot, i18n, validation, storage, verify-game
 scripts/                   migrate, seed, reset, webhook, polling, smoke tests, game verification
-docs/                      architecture, API, deployment, admin guide, testing, licensing, security
+docs/                      architecture, API, deployment, admin guide, testing, licensing, security, SEO
 ```
 
 ---
@@ -102,6 +102,12 @@ All six are **Playnix Originals** — original code and art owned by this projec
 `Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` · `Reversi Duel` (premium)
 
 Licensing policy for adding third-party games: [`docs/GAME_SOURCES.md`](docs/GAME_SOURCES.md). **Publicly accessible ≠ free to redistribute** — nothing is published without a verified licence recorded in the `games.license` column.
+
+---
+
+## Search engines
+
+`/robots.txt` and `/sitemap.xml` are generated from the database, every public page carries a canonical URL, `hreflang` alternates (ar/en/fr), Open Graph tags and schema.org JSON-LD (`VideoGame`, `BreadcrumbList`, `ItemList`), and account pages are `noindex`. Set `NEXT_PUBLIC_APP_URL` before building so canonical URLs point at the production domain. Rebuild the share card with `npm run og:image`. Full guide: [`docs/SEO_AR.md`](docs/SEO_AR.md).
 
 ---
 

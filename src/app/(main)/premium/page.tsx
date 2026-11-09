@@ -4,10 +4,21 @@ import { env } from "@/lib/env";
 import { getDictionary } from "@/lib/i18n";
 import { listPlans, planFeatures } from "@/lib/payments";
 import { Icon } from "@/components/Icons";
+import { buildMetadata } from "@/lib/seo";
 import { PremiumPlans } from "@/components/PremiumPlans";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Premium" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { dict, locale } = await getDictionary();
+  return buildMetadata({
+    title: dict["premium.title"],
+    description: `${dict["premium.subtitle"]} ${dict["premium.benefit.library"]}`,
+    path: "/premium",
+    locale,
+    keywords: ["Playnix Premium", "Telegram game subscription", "premium games"],
+  });
+}
 
 export default async function PremiumPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
   const { reason } = await searchParams;

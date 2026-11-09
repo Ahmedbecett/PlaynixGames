@@ -5,6 +5,7 @@ import { getCurrentUser, getPremiumStatus } from "@/lib/auth";
 import { all, one } from "@/lib/db";
 import { getPublishedGameBySlug, getScreenshots, getSimilarGames, toCard } from "@/lib/games";
 import { getDictionary, formatDate, formatNumber } from "@/lib/i18n";
+import { breadcrumbNode, buildMetadata, jsonLdGraph, videoGameNode } from "@/lib/seo";
 import { GameActions } from "@/components/GameActions";
 import { GameCard } from "@/components/GameCard";
 import { Icon } from "@/components/Icons";
@@ -15,17 +16,30 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const game = await getPublishedGameBySlug(slug);
-  if (!game) return { title: "Game" };
-  return {
-    title: game.title,
-    description: game.short_description ?? undefined,
-    openGraph: {
-      title: `${game.title} · Playnix`,
-      description: game.short_description ?? undefined,
-      images: game.cover_url ? [game.cover_url] : undefined,
-    },
-  };
+  const [game, { locale }] = await Promise.all([getPublishedGameBySlug(slug), getDictionary()]);
+  if (!game) return { title: "Game", robots: { index: false, follow: true } };
+
+  const description =
+    game.short_description ??
+    `Play ${game.title} instantly inside Telegram${game.category_name ? ` — one of the best ${game.category_name} games on Playnix` : ""}. No installs, no downloads.`;
+
+  return buildMetadata({
+    title: `${game.title} — play free online`,
+    description,
+    path: `/game/${slug}`,
+    image: game.cover_url,
+    type: "article",
+    locale,
+    publishedTime: game.published_at,
+    modifiedTime: game.updated_at,
+    keywords: [
+      game.title,
+      `play ${game.title}`,
+      `${game.title} online`,
+      game.category_name ? `${game.category_name} games` : "online games",
+      "Telegram games",
+    ],
+  });
 }
 
 export default async function GamePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -86,6 +100,21 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
 
   return (
     <div className="fade-up">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdGraph([
+            breadcrumbNode([
+              { name: dict["nav.home"], path: "/" },
+              ...(game.category_slug && game.category_name
+                ? [{ name: game.category_name, path: `/category/${game.category_slug}` }]
+                : []),
+              { name: game.title, path: `/game/${game.slug}` },
+            ]),
+            videoGameNode(game, Number(game.rating_count), Number(game.rating_avg)),
+          ]),
+        }}
+      />
       <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="min-w-0">
           {/* cover */}
@@ -175,7 +204,7 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
                   <img
                     key={shot.id}
                     src={shot.image_url}
-                    alt=""
+                    alt={`${game.title} — ${dict["game.screenshots"]}`}
                     loading="lazy"
                     className="h-36 rounded-xl border border-[rgba(139,92,246,.2)] object-cover"
                   />

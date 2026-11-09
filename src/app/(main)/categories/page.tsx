@@ -2,9 +2,19 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { listCategoriesWithCounts } from "@/lib/games";
 import { getDictionary, formatNumber } from "@/lib/i18n";
+import { breadcrumbNode, buildMetadata, itemListNode, jsonLdGraph } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Categories" };
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { dict, locale } = await getDictionary();
+  return buildMetadata({
+    title: dict["categories.title"],
+    description: dict["home.catalogNote"],
+    path: "/categories",
+    locale,
+  });
+}
 
 export default async function CategoriesPage() {
   const { dict, locale } = await getDictionary();
@@ -12,6 +22,22 @@ export default async function CategoriesPage() {
 
   return (
     <div className="fade-up">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: jsonLdGraph([
+            breadcrumbNode([
+              { name: dict["nav.home"], path: "/" },
+              { name: dict["categories.title"], path: "/categories" },
+            ]),
+            itemListNode(
+              dict["categories.title"],
+              "/categories",
+              categories.map((category) => ({ name: category.name, path: `/category/${category.slug}` })),
+            ),
+          ]),
+        }}
+      />
       <h1 className="mb-1 text-xl font-extrabold tracking-tight">{dict["categories.title"]}</h1>
       <p className="mb-5 text-xs text-[var(--color-muted)]">{dict["home.catalogNote"]}</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

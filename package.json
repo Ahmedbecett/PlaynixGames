@@ -2,7 +2,7 @@
   "name": "playnix",
   "version": "1.0.0",
   "private": true,
-  "description": "Playnix \u2014 Telegram gaming search engine & instant-play Mini App",
+  "description": "Playnix — Telegram gaming search engine & instant-play Mini App",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "prebuild": "tsx --env-file-if-exists=.env.local scripts/ensure-db.ts",
@@ -16,6 +16,7 @@
     "bot:webhook": "tsx --env-file-if-exists=.env.local scripts/set-webhook.ts",
     "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke-test.ts",
     "logo:png": "node scripts/logo-png.mjs",
+    "og:image": "node scripts/og-image.mjs",
     "verify:games": "tsx --env-file-if-exists=.env.local scripts/verify-games.ts"
   },
   "dependencies": {

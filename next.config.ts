@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // node:sqlite + pg must stay outside the bundler
   serverExternalPackages: ["pg"],
+  async redirects() {
+    // Legacy/alternate entry points → canonical pages (keeps link equity).
+    return [
+      { source: "/games", destination: "/categories", permanent: true },
+      { source: "/games/:slug", destination: "/game/:slug", permanent: true },
+      { source: "/game", destination: "/categories", permanent: true },
+      { source: "/category", destination: "/categories", permanent: true },
+    ];
+  },
   async headers() {
     // In development the app is reviewed inside the sandbox preview iframe, so
     // framing must stay open. Production locks framing to Telegram clients only.
