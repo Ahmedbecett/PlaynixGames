@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Skyline Builder</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; --ok:#22C55E; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 14px;
+    font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  header b { display:block; font-size:15px; color:var(--text); letter-spacing:0; font-variant-numeric:tabular-nums; }
+  header .neg b { color:#F87171; }
+  #stage { flex:1; display:grid; place-items:center; padding:6px; min-height:0; }
+  canvas { display:block; border-radius:16px; touch-action:none;
+    box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); }
+  #bar { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; padding:8px 10px 16px; }
+  #bar button { flex:1 1 30%; min-width:78px; padding:11px 6px; border-radius:13px; cursor:pointer;
+    border:1px solid rgba(139,92,246,.35); background:rgba(23,30,48,.92); color:var(--text);
+    font-size:11.5px; font-weight:700; line-height:1.35; }
+  #bar button:active { transform:scale(.97); border-color:var(--accent); }
+  #bar button small { display:block; font-size:9.5px; font-weight:600; color:var(--muted); margin-top:2px; }
+  #bar button.on { border-color:rgba(34,211,238,.75); background:rgba(34,211,238,.16); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.86);
+    backdrop-filter:blur(6px); z-index:5; padding:16px; }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card);
+    border:1px solid rgba(34,211,238,.25); max-width:340px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:12.5px; line-height:1.65; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px;
+    color:#0b0f18; background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+  #toast { position:absolute; left:50%; bottom:96px; transform:translateX(-50%); padding:8px 14px;
+    border-radius:11px; font-size:12px; font-weight:700; background:rgba(23,30,48,.96);
+    border:1px solid rgba(139,92,246,.4); opacity:0; transition:opacity .2s; pointer-events:none; z-index:6; }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span>Funds<b id="funds">$0</b></span>
+    <span>Souls<b id="pop">0</b></span>
+    <span>Day<b id="day">1</b></span>
+    <span>Income<b id="income">$0/s</b></span>
+  </header>
+  <div id="stage">
+    <canvas id="game" width="640" height="480" aria-label="City building plot"></canvas>
+    <div id="toast"></div>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Skyline Builder</h1>
+        <p>You have a plot and a budget. Place buildings, collect rent every second, keep your citizens happy. A bankrupt city ends the run.</p>
+        <button id="start">Start building</button>
+      </div>
+    </div>
+  </div>
+  <div id="bar">
+    <button data-type="house">House<small>$120 · +2 souls</small></button>
+    <button data-type="shop">Shop<small>$260 · +$6/s</small></button>
+    <button data-type="park">Park<small>$90 · +happy</small></button>
+    <button data-type="solar">Solar<small>$340 · +$11/s</small></button>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const el = (id) => document.getElementById(id);
+  const COLS = 8, ROWS = 6;
+  const HANDLE = 92;                       // renders at device pixel ratio
+  let W = 640, H = 480, tile = 60, ox = 0, oy = 0;
+
+  const TYPES = {
+    house:  { cost: 120, income: 2,  souls: 2, happy: 0,  color: "#8B5CF6", height: 1.5 },
+    shop:   { cost: 260, income: 6,  souls: 0, happy: -2, color: "#22D3EE", height: 1.1 },
+    park:   { cost: 90,  income: 0,  souls: 0, happy: 6,  color: "#22C55E", height: 0.25 },
+    solar:  { cost: 340, income: 11, souls: 0, happy: -1, color: "#FF7A18", height: 0.6 },
+  };
+
+  let grid = [];
+  let funds = 600, souls = 0, day = 1, happiness = 70, incomeAcc = 0, running = false;
+  let selected = "house";
+  let hover = -1, tick = 0;
+
+  function reset() {
+    grid = Array.from({ length: COLS * ROWS }, () => null);
+    funds = 600; souls = 0; day = 1; happiness = 70; incomeAcc = 0; tick = 0;
+    running = true;
+    selected = "house";
+    syncBar();
+    render();
+  }
+
+  function income() {
+    let total = 0;
+    for (const cell of grid) if (cell) total += TYPES[cell].income;
+    return total;
+  }
+
+  function happinessNow() {
+    let h = 62;
+    for (const cell of grid) {
+      if (!cell) continue;
+      const t = TYPES[cell];
+      h += t.happy;
+      if (cell === "shop" || cell === "solar") h -= 0.4;
+    }
+    return Math.max(0, Math.min(100, h));
+  }
+
+  function label(n) { return "$" + Math.round(n).toLocaleString("en-US"); }
+
+  function toast(message) {
+    const node = el("toast");
+    node.textContent = message;
+    node.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => node.classList.remove("show"), 1100);
+  }
+
+  function place(index) {
+    const type = TYPES[selected];
+    if (index < 0 || index >= grid.length) return;
+    if (grid[index]) { toast("That plot is taken"); return; }
+    if (funds < type.cost) { toast("Not enough funds"); return; }
+    funds -= type.cost;
+    grid[index] = selected;
+    souls += type.souls;
+    happiness = happinessNow();
+    if (happiness < 25) toast("Citizens are unhappy");
+    sync();
+    render();
+  }
+
+  function sync() {
+    el("funds").textContent = label(funds);
+    el("pop").textContent = souls;
+    el("day").textContent = day;
+    el("income").textContent = label(income()) + "/s";
+    el("funds").parentElement.classList.toggle("neg", funds < 0);
+  }
+
+  function syncBar() {
+    document.querySelectorAll("#bar button").forEach((button) => {
+      button.classList.toggle("on", button.dataset.type === selected);
+    });
+  }
+
+  /* -------------------------------------------------------------- geometry */
+  function layout() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    W = canvas.width; H = canvas.height;
+    tile = Math.floor(Math.min(W / COLS, H / ROWS));
+    ox = Math.floor((W - tile * COLS) / 2);
+    oy = Math.floor((H - tile * ROWS) / 2);
+    render();
+  }
+
+  function indexAt(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = canvas.width / rect.width;
+    const x = (clientX - rect.left) * dpr;
+    const y = (clientY - rect.top) * dpr;
+    if (x < ox || y < oy) return -1;
+    const col = Math.floor((x - ox) / tile);
+    const row = Math.floor((y - oy) / tile);
+    if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return -1;
+    return row * COLS + col;
+  }
+
+  /* ----------------------------------------------------------------- render */
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+
+    // sky gradient
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#131a2e");
+    sky.addColorStop(1, "#080b14");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    // ground plate
+    ctx.fillStyle = "rgba(23,30,48,.75)";
+    ctx.fillRect(ox - 6, oy - 6, tile * COLS + 12, tile * ROWS + 12);
+
+    for (let i = 0; i < grid.length; i += 1) {
+      const col = i % COLS, row = Math.floor(i / COLS);
+      const x = ox + col * tile, y = oy + row * tile;
+      const cell = grid[i];
+
+      // plot
+      ctx.fillStyle = hover === i ? "rgba(139,92,246,.24)" : "rgba(9,11,20,.72)";
+      ctx.fillRect(x + 2, y + 2, tile - 4, tile - 4);
+      ctx.strokeStyle = "rgba(139,92,246,.22)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 2.5, y + 2.5, tile - 5, tile - 5);
+
+      if (!cell) continue;
+      const type = TYPES[cell];
+      const pad = tile * 0.16;
+      const w = tile - pad * 2;
+      const h = w * type.height + w * 0.35;
+      const bx = x + pad;
+      const by = y + tile - pad - h;
+
+      // building body
+      const grad = ctx.createLinearGradient(bx, by, bx, by + h);
+      grad.addColorStop(0, type.color);
+      grad.addColorStop(1, "rgba(9,11,20,.9)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, w, h, Math.min(6, w * 0.12));
+      ctx.fill();
+
+      // windows
+      ctx.fillStyle = "rgba(248,250,252,.55)";
+      const cols = Math.max(2, Math.floor(w / 11));
+      const rows = Math.max(2, Math.floor(h / 13));
+      for (let c = 0; c < cols; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          if ((c + r + i) % 3 === 0) continue;
+          ctx.fillRect(bx + 4 + c * (w - 8) / cols, by + 5 + r * (h - 10) / rows, 3, 3.5);
+        }
+      }
+    }
+
+    // happiness bar
+    const bw = Math.min(W - 24, 240);
+    const bx = (W - bw) / 2;
+    const by = H - 16;
+    ctx.fillStyle = "rgba(161,170,189,.22)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, 7, 4);
+    ctx.fill();
+    ctx.fillStyle = happiness > 55 ? "#22C55E" : happiness > 25 ? "#FBBF24" : "#F87171";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, Math.max(4, bw * (happiness / 100)), 7, 4);
+    ctx.fill();
+  }
+
+  /* ------------------------------------------------------------------- loop */
+  function loop() {
+    requestAnimationFrame(loop);
+    if (!running) return;
+    tick += 1;
+    if (tick % 60 !== 0) return;
+
+    const rate = income() * (happiness / 100);
+    funds += rate;
+    incomeAcc += rate;
+    if (incomeAcc >= 900) { incomeAcc = 0; day += 1; }
+    if (funds < -600) {
+      running = false;
+      render();
+      showGameOver();
+      return;
+    }
+    sync();
+    render();
+  }
+
+  function showGameOver() {
+    const overlay = el("overlay");
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = "City bankrupt";
+    overlay.querySelector("p").textContent =
+      `You lasted ${day} day${day === 1 ? "" : "s"} with ${souls} citizens and ${label(income())} per second. Try cheaper buildings first.`;
+    overlay.querySelector("button").textContent = "Build again";
+  }
+
+  /* ------------------------------------------------------------------ input */
+  function point(event) {
+    const touch = event.touches && event.touches[0];
+    return { x: touch ? touch.clientX : event.clientX, y: touch ? touch.clientY : event.clientY };
+  }
+
+  canvas.addEventListener("pointermove", (event) => {
+    const next = indexAt(event.clientX, event.clientY);
+    if (next !== hover) { hover = next; render(); }
+  });
+  canvas.addEventListener("pointerleave", () => { hover = -1; render(); });
+  canvas.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const { x, y } = point(event);
+    place(indexAt(x, y));
+  });
+  canvas.addEventListener("touchstart", (event) => {
+    event.preventDefault();
+    const { x, y } = point(event);
+    place(indexAt(x, y));
+  }, { passive: false });
+
+  document.querySelectorAll("#bar button").forEach((button) => {
+    button.addEventListener("click", () => {
+      selected = button.dataset.type;
+      syncBar();
+      toast("Selected: " + button.textContent.split("\n")[0]);
+    });
+  });
+
+  el("start").addEventListener("click", () => {
+    el("overlay").classList.add("hidden");
+    reset();
+  });
+
+  window.addEventListener("resize", layout);
+  window.addEventListener("keydown", (event) => {
+    const keys = { "1": "house", "2": "shop", "3": "park", "4": "solar" };
+    if (keys[event.key]) { selected = keys[event.key]; syncBar(); }
+  });
+
+  layout();
+  sync();
+  loop();
+})();
+</script>
+</body>
+</html>

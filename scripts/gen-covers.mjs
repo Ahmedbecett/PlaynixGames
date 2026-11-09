@@ -226,6 +226,145 @@ const games = [
       );
     },
   },
+  {
+    slug: "skyline-builder",
+    title: "Skyline Builder",
+    accent: BRAND.cyan,
+    secondary: BRAND.gold,
+    motif: () => {
+      // A stepped tower silhouette with lit windows, standing on a rent graph.
+      const tower = (x, baseY, w, h, fill, accentLit) => {
+        const windows = [];
+        for (let row = 0; row < Math.floor((h - 40) / 62); row += 1) {
+          for (let col = 0; col < Math.floor((w - 40) / 58); col += 1) {
+            const lit = (row * 7 + col * 3 + x) % 5 !== 0;
+            windows.push(
+              `<rect x="${x + 22 + col * 58}" y="${baseY - h + 26 + row * 62}" width="30" height="34" rx="5" fill="${lit ? accentLit : "#0d1424"}" opacity="${lit ? 0.92 : 1}"/>`
+            );
+          }
+        }
+        return `${roundRect(x, baseY - h, w, h, 14, fill, 'stroke="rgba(139,92,246,0.35)" stroke-width="2"')}${windows.join("")}`;
+      };
+      const bars = Array.from({ length: 12 }, (_, i) => {
+        const h = 26 + ((i * 37) % 70);
+        return roundRect(700 + i * 44, 700 - h, 26, h, 8, i % 3 === 0 ? BRAND.gold : "rgba(250,204,21,0.34)");
+      }).join("");
+      return `
+        ${tower(720, 700, 150, 300, "#111a2e", BRAND.gold)}
+        ${tower(880, 700, 170, 440, "#0f1729", BRAND.cyan)}
+        ${tower(1060, 700, 130, 230, "#111a2e", BRAND.gold)}
+        <line x1="690" y1="700" x2="1260" y2="700" stroke="rgba(34,211,238,0.5)" stroke-width="3"/>
+        ${bars}
+      `;
+    },
+  },
+  {
+    slug: "turret-line",
+    title: "Turret Line",
+    accent: BRAND.orange,
+    secondary: BRAND.cyan,
+    motif: () => {
+      // Reticle over a corridor of incoming shapes.
+      const target = (cx, cy, r, color, opacity) => `
+        <g opacity="${opacity}">
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="3"/>
+          <circle cx="${cx}" cy="${cy}" r="${r * 0.45}" fill="${color}" opacity="0.5"/>
+          <line x1="${cx - r - 12}" y1="${cy}" x2="${cx - r + 6}" y2="${cy}" stroke="${color}" stroke-width="3"/>
+          <line x1="${cx + r - 6}" y1="${cy}" x2="${cx + r + 12}" y2="${cy}" stroke="${color}" stroke-width="3"/>
+          <line x1="${cx}" y1="${cy - r - 12}" x2="${cx}" y2="${cy - r + 6}" stroke="${color}" stroke-width="3"/>
+          <line x1="${cx}" y1="${cy + r - 6}" x2="${cx}" y2="${cy + r + 12}" stroke="${color}" stroke-width="3"/>
+        </g>`;
+      const tracer = (x1, y1, x2, y2, color, w, opacity) =>
+        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" opacity="${opacity}"/>`;
+      const enemy = (cx, cy, size, color) => `
+        <g>
+          <rect x="${cx - size / 2}" y="${cy - size / 2}" width="${size}" height="${size}" rx="${size * 0.24}"
+            transform="rotate(45 ${cx} ${cy})" fill="none" stroke="${color}" stroke-width="3"/>
+          <circle cx="${cx}" cy="${cy}" r="${size * 0.24}" fill="${color}" opacity="0.65"/>
+        </g>`;
+      return `
+        ${roundRect(720, 120, 520, 560, 26, "rgba(9,11,20,0.7)", 'stroke="rgba(255,122,24,0.35)" stroke-width="2"')}
+        ${tracer(980, 660, 900, 480, BRAND.orange, 9, 0.9)}
+        ${tracer(980, 660, 1090, 470, BRAND.orange, 7, 0.55)}
+        ${tracer(980, 660, 1010, 400, BRAND.cyan, 5, 0.4)}
+        ${enemy(880, 300, 74, BRAND.red)}
+        ${enemy(1080, 250, 58, BRAND.gold)}
+        ${enemy(1000, 430, 46, BRAND.red)}
+        ${target(1080, 250, 58, BRAND.cyan, 0.95)}
+        ${roundRect(920, 620, 120, 80, 18, "#141c30", 'stroke="rgba(34,211,238,0.45)" stroke-width="3"')}
+        <circle cx="980" cy="660" r="22" fill="${BRAND.orange}"/>
+      `;
+    },
+  },
+  {
+    slug: "math-rush",
+    title: "Math Rush",
+    accent: BRAND.gold,
+    secondary: BRAND.violet,
+    premium: false,
+    motif: () => {
+      const op = (cx, cy, size, bg, stroke, glyph) => `
+        <g>
+          ${roundRect(cx - size / 2, cy - size / 2, size, size, size * 0.26, bg, `stroke="${stroke}" stroke-width="3"`)}
+          <text x="${cx}" y="${cy + size * 0.19}" font-family="sans-serif" font-size="${size * 0.56}" font-weight="bold"
+            fill="${stroke}" text-anchor="middle">${glyph}</text>
+        </g>`;
+      const digits = Array.from({ length: 16 }, (_, i) => {
+        const col = i % 4, row = Math.floor(i / 4);
+        const x = 700 + col * 138, y = 150 + row * 138;
+        const glyph = ["7", "3", "9", "×", "+", "4", "8", "2", "6", "÷", "5", "1", "−", "0", "=", "?"][i];
+        const hot = i % 5 === 1;
+        return `
+          <g opacity="${hot ? 1 : 0.34}">
+            ${roundRect(x, y, 116, 116, 24, hot ? "#1a2238" : "rgba(20,28,48,0.6)",
+              `stroke="${hot ? BRAND.gold : "rgba(139,92,246,0.5)"}" stroke-width="${hot ? 3.5 : 2}"`)}
+            <text x="${x + 58}" y="${y + 80}" font-family="sans-serif" font-size="62" font-weight="bold"
+              fill="${hot ? BRAND.gold : BRAND.cream}" text-anchor="middle">${glyph}</text>
+          </g>`;
+      }).join("");
+      return digits;
+    },
+  },
+  {
+    slug: "connect-four-duel",
+    title: "Connect Four",
+    accent: BRAND.red,
+    secondary: BRAND.gold,
+    motif: () => {
+      const cols = 7, rows = 6, cell = 66, pad = 12;
+      const boardW = cols * cell + pad * 2;
+      const boardH = rows * cell + pad * 2;
+      const bx = 1230 - boardW;
+      const by = 640 - boardH;
+      // A finished diagonal of four reds, with a few yellows holding the other line.
+      const set = new Set(["5,1", "4,2", "3,3", "2,4", "4,4", "5,3", "3,5", "5,4", "4,5", "5,5", "2,6", "1,3"]);
+      const reds = new Set(["5,1", "4,2", "3,3", "2,4"]);
+      const discs = [];
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) discs.push([r, c]);
+      }
+      const holes = discs.map(([r, c]) => {
+        const key = `${r},${c}`;
+        const cx = bx + pad + c * cell + cell / 2;
+        const cy = by + pad + r * cell + cell / 2;
+        const filled = set.has(key);
+        const isRed = reds.has(key);
+        return `
+          <circle cx="${cx}" cy="${cy}" r="${cell * 0.38}" fill="#0a0f1c"/>
+          ${
+            filled
+              ? `<circle cx="${cx}" cy="${cy}" r="${cell * 0.34}" fill="${isRed ? BRAND.red : BRAND.gold}"
+                   opacity="${isRed ? 0.95 : 0.88}" ${isRed ? `stroke="${BRAND.cream}" stroke-width="2.5"` : ""}/>`
+              : ""
+          }
+        `;
+      }).join("");
+      return `
+        ${roundRect(bx, by, boardW, boardH, 26, "#14203a", 'stroke="rgba(34,211,238,0.35)" stroke-width="3"')}
+        ${holes}
+      `;
+    },
+  },
 ];
 
 function frame({ title, accent, secondary, motif, premium, slug }) {

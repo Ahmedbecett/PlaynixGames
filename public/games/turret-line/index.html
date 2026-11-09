@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Turret Line</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC; --muted:#A1AABD; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-size:11px;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  header b { display:block; font-size:15px; color:var(--text); letter-spacing:0; font-variant-numeric:tabular-nums; }
+  #stage { flex:1; display:grid; place-items:center; padding:6px; min-height:0; position:relative; }
+  canvas { display:block; border-radius:16px; touch-action:none;
+    box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); }
+  #hint { padding:6px 14px 14px; text-align:center; font-size:11px; color:var(--muted); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.86);
+    backdrop-filter:blur(6px); z-index:5; padding:16px; }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card);
+    border:1px solid rgba(34,211,238,.25); max-width:340px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:12.5px; line-height:1.65; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px;
+    color:#0b0f18; background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span>Score<b id="score">0</b></span>
+    <span>Wave<b id="wave">1</b></span>
+    <span>Lives<b id="lives">5</b></span>
+    <span>Ammo<b id="ammo">∞</b></span>
+  </header>
+  <div id="stage">
+    <canvas id="game" width="640" height="640" aria-label="Turret defense play field"></canvas>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Turret Line</h1>
+        <p>Aim with the pointer and click to fire. Enemy drones descend in waves — every miss costs time, every hit builds your combo. Stop them before they reach the base line.</p>
+        <button id="start">Start defence</button>
+      </div>
+    </div>
+  </div>
+  <div id="hint">Move to aim · click / tap to fire · hold for rapid fire</div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const el = (id) => document.getElementById(id);
+
+  let W = 640, H = 640, baseY = 0;
+  let running = false, paused = false;
+  let score = 0, wave = 1, lives = 5, combo = 0, comboBest = 0;
+  let aim = { x: 320, y: 200 };
+  let firing = false, cooldown = 0;
+  let enemies = [], bullets = [], particles = [];
+  let spawnTimer = 0, spawnEvery = 78;
+
+  function reset() {
+    score = 0; wave = 1; lives = 5; combo = 0; comboBest = 0;
+    enemies = []; bullets = []; particles = [];
+    spawnTimer = 0; spawnEvery = 78;
+    running = true; paused = false;
+    sync();
+  }
+
+  function sync() {
+    el("score").textContent = score;
+    el("wave").textContent = wave;
+    el("lives").textContent = lives;
+    el("ammo").textContent = combo > 1 ? "x" + combo : "∞";
+  }
+
+  function layout() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    W = canvas.width; H = canvas.height;
+    baseY = H - Math.round(H * 0.08);
+  }
+
+  function point(event) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = canvas.width / rect.width;
+    return { x: (event.clientX - rect.left) * dpr, y: (event.clientY - rect.top) * dpr };
+  }
+
+  function spawn() {
+    const dpr = canvas.width / (canvas.getBoundingClientRect().width || canvas.width);
+    const speed = (0.42 + wave * 0.1) * dpr;
+    const radius = (16 + Math.random() * 8) * dpr;
+    enemies.push({
+      x: radius + Math.random() * (W - radius * 2),
+      y: -radius * 2,
+      vx: (Math.random() - 0.5) * 0.7 * dpr,
+      vy: speed,
+      r: radius,
+      hp: wave > 5 && Math.random() < 0.28 ? 2 : 1,
+      hue: Math.random() < 0.25 ? "#F87171" : "#22D3EE",
+    });
+  }
+
+  function burst(x, y, color, count) {
+    for (let i = 0; i < count; i += 1) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 1.2 + Math.random() * 3.4;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, color });
+    }
+  }
+
+  function shoot() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = canvas.width / (rect.width || 1);
+    const from = { x: W / 2, y: baseY - 12 * dpr };
+    const dx = aim.x - from.x;
+    const dy = aim.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const speed = 8.4 * dpr;
+    bullets.push({ x: from.x, y: from.y, vx: (dx / len) * speed, vy: (dy / len) * speed });
+    cooldown = 4;
+  }
+
+  function gameOver() {
+    running = false;
+    const overlay = el("overlay");
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = "Base overrun";
+    overlay.querySelector("p").textContent =
+      `You reached wave ${wave} with ${score} points and a best combo of ${comboBest}.`;
+    overlay.querySelector("button").textContent = "Defend again";
+  }
+
+  function update() {
+    if (!running) return;
+
+    // spawning
+    spawnTimer += 1;
+    if (spawnTimer >= spawnEvery) {
+      spawnTimer = 0;
+      spawn();
+      if (enemies.length > 0 && score > 0 && score % 220 === 0) {
+        wave += 1;
+        spawnEvery = Math.max(24, spawnEvery - 8);
+        sync();
+      }
+    }
+
+    // bullets
+    for (let i = bullets.length - 1; i >= 0; i -= 1) {
+      const b = bullets[i];
+      b.x += b.vx; b.y += b.vy;
+      if (b.y < -30 || b.x < -30 || b.x > W + 30 || b.y > H + 30) bullets.splice(i, 1);
+    }
+
+    // enemies
+    for (let i = enemies.length - 1; i >= 0; i -= 1) {
+      const e = enemies[i];
+      e.x += e.vx; e.y += e.vy;
+      if (e.x < e.r || e.x > W - e.r) e.vx *= -1;
+
+      // hit by bullet?
+      let hit = false;
+      for (let j = bullets.length - 1; j >= 0; j -= 1) {
+        const b = bullets[j];
+        if (Math.hypot(b.x - e.x, b.y - e.y) < e.r + 4) {
+          bullets.splice(j, 1);
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        e.hp -= 1;
+        if (e.hp <= 0) {
+          score += 10 + combo * 3;
+          combo += 1;
+          comboBest = Math.max(comboBest, combo);
+          burst(e.x, e.y, e.hue, 12);
+          enemies.splice(i, 1);
+          sync();
+          continue;
+        }
+        burst(e.x, e.y, "#FFB35C", 5);
+      }
+
+      // reached base
+      if (e.y > baseY) {
+        enemies.splice(i, 1);
+        lives -= 1;
+        combo = 0;
+        burst(e.x, baseY, "#F87171", 22);
+        sync();
+        if (lives <= 0) { gameOver(); return; }
+      }
+    }
+
+    // particles
+    for (let i = particles.length - 1; i >= 0; i -= 1) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.97; p.vy *= 0.97;
+      p.life -= 0.035;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // firing
+    if (firing) {
+      if (cooldown > 0) cooldown -= 1;
+      else shoot();
+    }
+  }
+
+  function render() {
+    const dpr = canvas.width / (canvas.getBoundingClientRect().width || 1);
+
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#0d1424");
+    sky.addColorStop(0.75, "#0a0f1c");
+    sky.addColorStop(1, "#141b2e");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    // star field
+    ctx.fillStyle = "rgba(161,170,189,.35)";
+    for (let i = 0; i < 44; i += 1) {
+      const x = ((i * 977) % W);
+      const y = ((i * 613) % (H * 0.7));
+      ctx.fillRect(x, y, 1.6, 1.6);
+    }
+
+    // base line
+    ctx.strokeStyle = "rgba(255,122,24,.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, baseY);
+    ctx.lineTo(W, baseY);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,122,24,.1)";
+    ctx.fillRect(0, baseY, W, H - baseY);
+
+    // turret
+    const tx = W / 2, ty = baseY - 10 * dpr;
+    const angle = Math.atan2(aim.y - ty, aim.x - tx);
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate(angle);
+    ctx.fillStyle = "#8B5CF6";
+    ctx.beginPath();
+    ctx.roundRect(0, -5 * dpr, 34 * dpr, 10 * dpr, 5 * dpr);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = "#22D3EE";
+    ctx.beginPath();
+    ctx.arc(tx, ty, 12 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#090B14";
+    ctx.beginPath();
+    ctx.arc(tx, ty, 6 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+
+    // aim reticle
+    ctx.strokeStyle = "rgba(34,211,238,.75)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(aim.x, aim.y, 13 * dpr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(aim.x - 20 * dpr, aim.y); ctx.lineTo(aim.x - 6 * dpr, aim.y);
+    ctx.moveTo(aim.x + 6 * dpr, aim.y); ctx.lineTo(aim.x + 20 * dpr, aim.y);
+    ctx.moveTo(aim.x, aim.y - 20 * dpr); ctx.lineTo(aim.x, aim.y - 6 * dpr);
+    ctx.moveTo(aim.x, aim.y + 6 * dpr); ctx.lineTo(aim.x, aim.y + 20 * dpr);
+    ctx.stroke();
+
+    // bullets
+    ctx.fillStyle = "#FFB35C";
+    for (const b of bullets) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 3.4 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // enemies
+    for (const e of enemies) {
+      ctx.fillStyle = e.hue;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(9,11,20,.65)";
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      if (e.hp > 1) {
+        ctx.strokeStyle = "#FBBF24";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // particles
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 1.6, p.y - 1.6, 3.2, 3.2);
+    }
+    ctx.globalAlpha = 1;
+
+    // combo
+    if (combo > 1) {
+      ctx.fillStyle = "rgba(255,179,92,.92)";
+      ctx.font = "700 " + Math.round(13 * dpr) + "px ui-sans-serif,system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("COMBO x" + combo, W / 2, 26 * dpr);
+    }
+  }
+
+  function loop() {
+    requestAnimationFrame(loop);
+    update();
+    render();
+  }
+
+  // input
+  canvas.addEventListener("pointermove", (event) => {
+    const p = point(event);
+    aim.x = p.x; aim.y = p.y;
+    if (firing) sync();
+  });
+  canvas.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const p = point(event);
+    aim.x = p.x; aim.y = p.y;
+    firing = true;
+    if (running) shoot();
+  });
+  window.addEventListener("pointerup", () => { firing = false; });
+  canvas.addEventListener("pointerleave", () => { firing = false; });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  el("start").addEventListener("click", () => {
+    el("overlay").classList.add("hidden");
+    reset();
+    layout();
+  });
+
+  window.addEventListener("resize", layout);
+  layout();
+  sync();
+  loop();
+})();
+</script>
+</body>
+</html>

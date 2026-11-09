@@ -6,6 +6,7 @@ import { Icon } from "./Icons";
 import { useLocale, useT } from "./LocaleProvider";
 import { RatingInput, StarsDisplay } from "./Rating";
 import { useToast } from "./Toast";
+import { botStartAppLink, gameStartParam } from "@/lib/telegram-links";
 
 export type Review = {
   id: string;
@@ -15,8 +16,74 @@ export type Review = {
   author: { name: string; photoUrl: string | null; username: string | null };
 };
 
+/**
+ * Shown in place of the review list while a game has no reviews yet.
+ *
+ * Signed-in players get the star panel that opens the form. Guests are sent to
+ * the Telegram bot instead: the website has no password login, so every review
+ * is written by someone who authenticated through the bot. Sending a guest to an
+ * empty form would be a dead end, and telling them to "sign in" points at a page
+ * that does not exist.
+ */
+function GuestAwarePanel({
+  canReview,
+  telegramUrl,
+  onActivate,
+}: {
+  canReview: boolean;
+  telegramUrl: string | null;
+  onActivate: () => void;
+}) {
+  const t = useT();
+  const stars = (
+    <span className="flex items-center gap-1" aria-hidden>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Icon key={star} name="star" size={21} filled style={{ color: "#FFB35C" }} />
+      ))}
+    </span>
+  );
+  const className =
+    "flex w-full flex-col items-center gap-2 rounded-2xl border border-dashed border-[rgba(255,179,92,.42)] p-5 text-center transition hover:border-[rgba(255,179,92,.75)]";
+  const style = { background: "rgba(255,179,92,.07)" };
+
+  if (canReview) {
+    return (
+      <button type="button" onClick={onActivate} className={className} style={style}>
+        {stars}
+        <span className="text-sm font-extrabold">{t("reviews.ctaFirst")}</span>
+        <span className="text-[11.5px] leading-relaxed text-[var(--color-muted)]">{t("game.noReviews")}</span>
+        <span className="mt-0.5 text-[11px] font-bold text-[var(--color-cyan)]">{t("reviews.tapStar")}</span>
+      </button>
+    );
+  }
+
+  const label = (
+    <>
+      {stars}
+      <span className="text-sm font-extrabold">{t("reviews.ctaTitle")}</span>
+      <span className="text-[11.5px] leading-relaxed text-[var(--color-muted)]">{t("game.noReviews")}</span>
+      <span className="mt-0.5 text-[11px] font-bold text-[var(--color-cyan)]">{t("reviews.guestCta")}</span>
+    </>
+  );
+
+  if (!telegramUrl) {
+    return (
+      <div className={className} style={style}>
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <a href={telegramUrl} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+      {label}
+    </a>
+  );
+}
+
 export function Reviews({
   gameId,
+  gameSlug,
   initialReviews,
   average,
   total,
@@ -25,6 +92,8 @@ export function Reviews({
   canReview,
 }: {
   gameId: string;
+  /** Used to deep-link guests into this game inside the Telegram bot. */
+  gameSlug: string;
   initialReviews: Review[];
   average: number;
   total: number;
@@ -114,9 +183,11 @@ export function Reviews({
       )}
 
       {reviews.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[rgba(161,170,189,.25)] p-4 text-center text-xs text-[var(--color-muted)]">
-          {t("game.noReviews")}
-        </p>
+        <GuestAwarePanel
+          canReview={canReview}
+          telegramUrl={botStartAppLink(gameStartParam(gameSlug))}
+          onActivate={() => setOpen(true)}
+        />
       ) : (
         <ul className="space-y-3">
           {reviews.map((review) => (

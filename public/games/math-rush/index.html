@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Math Rush</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC;
+    --muted:#A1AABD; --ok:#22C55E; --bad:#F87171; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    user-select:none; -webkit-user-select:none; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-size:11px;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  header b { display:block; font-size:15px; color:var(--text); letter-spacing:0; font-variant-numeric:tabular-nums; }
+  #timer { height:4px; margin:0 14px; border-radius:99px; background:rgba(161,170,189,.2); overflow:hidden; }
+  #timer > i { display:block; height:100%; width:100%; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    transition:width .18s linear; }
+  #stage { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:12px; position:relative; min-height:0; }
+  #question { font-size:clamp(38px,13vw,68px); font-weight:850; letter-spacing:-2px; font-variant-numeric:tabular-nums;
+    background:linear-gradient(100deg,var(--cream,#F5F1E8),var(--cyan));
+    -webkit-background-clip:text; background-clip:text; color:transparent; text-align:center; line-height:1.1; }
+  #answers { display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:10px; width:100%; max-width:360px; }
+  #answers button { padding:18px 8px; border-radius:16px; border:1px solid rgba(139,92,246,.35);
+    background:rgba(23,30,48,.92); color:var(--text); font-size:22px; font-weight:800;
+    font-variant-numeric:tabular-nums; transition:transform .1s, border-color .15s, background .15s; }
+  #answers button:active { transform:scale(.97); }
+  #answers button.ok { border-color:var(--ok); background:rgba(34,197,94,.22); }
+  #answers button.bad { border-color:var(--bad); background:rgba(248,113,113,.22); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.9);
+    backdrop-filter:blur(6px); z-index:5; padding:16px; }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card);
+    border:1px solid rgba(34,211,238,.25); max-width:340px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:12.5px; line-height:1.65; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px;
+    color:#0b0f18; background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span>Score<b id="score">0</b></span>
+    <span>Streak<b id="streak">0</b></span>
+    <span>Level<b id="level">1</b></span>
+    <span>Best<b id="best">0</b></span>
+  </header>
+  <div id="timer"><i id="bar"></i></div>
+  <div id="stage">
+    <div id="question">—</div>
+    <div id="answers"></div>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Math Rush</h1>
+        <p>Answer as many sums as you can before the bar empties. A wrong answer breaks your streak; three mistakes end the run. Levels get harder.</p>
+        <button id="start">Start round</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const el = (id) => document.getElementById(id);
+  const BEST_KEY = "playnix.mathrush.best";
+
+  let running = false;
+  let score = 0, streak = 0, level = 1, mistakes = 0;
+  let answer = 0;
+  let timeLeft = 100;          // percent
+  let interval = null;
+  let locked = false;
+
+  let best = 0;
+  try { best = Number(localStorage.getItem(BEST_KEY) || 0) || 0; } catch { best = 0; }
+
+  function sync() {
+    el("score").textContent = score;
+    el("streak").textContent = streak;
+    el("level").textContent = level;
+    el("best").textContent = best;
+    el("bar").style.width = Math.max(0, timeLeft) + "%";
+  }
+
+  function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function makeQuestion() {
+    // difficulty scales with level: sums → products → two-step
+    let a, b, text, result;
+    if (level <= 2) {
+      a = rand(2, 9 + level * 4);
+      b = rand(2, 9 + level * 4);
+      if (Math.random() < 0.5) { text = `${a} + ${b}`; result = a + b; }
+      else { if (b > a) [a, b] = [b, a]; text = `${a} − ${b}`; result = a - b; }
+    } else if (level <= 4) {
+      a = rand(2, 6 + level);
+      b = rand(2, 9);
+      text = `${a} × ${b}`;
+      result = a * b;
+    } else {
+      a = rand(2, 9);
+      b = rand(2, 9);
+      const c = rand(1, 20);
+      text = `${a} × ${b} + ${c}`;
+      result = a * b + c;
+    }
+
+    answer = result;
+    el("question").textContent = text + " = ?";
+
+    // distractors close to the answer, never negative
+    const options = new Set([result]);
+    let guard = 0;
+    while (options.size < 4 && guard < 60) {
+      guard += 1;
+      const delta = rand(1, Math.max(3, Math.round(Math.abs(result) * 0.28) + 2)) * (Math.random() < 0.5 ? -1 : 1);
+      const candidate = result + delta;
+      if (candidate >= 0 && candidate !== result) options.add(candidate);
+    }
+    const list = Array.from(options);
+    for (let i = list.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+
+    const box = el("answers");
+    box.innerHTML = "";
+    for (const option of list) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = option;
+      button.addEventListener("click", () => choose(option, button));
+      box.appendChild(button);
+    }
+    locked = false;
+  }
+
+  function choose(option, button) {
+    if (!running || locked) return;
+    locked = true;
+    if (option === answer) {
+      button.classList.add("ok");
+      streak += 1;
+      score += 10 + streak * 2;
+      if (streak > 0 && streak % 5 === 0) level += 1;
+      timeLeft = Math.min(100, timeLeft + 9);
+      if (score > best) {
+        best = score;
+        try { localStorage.setItem(BEST_KEY, String(best)); } catch {}
+      }
+      sync();
+      setTimeout(() => { if (running) makeQuestion(); }, 190);
+    } else {
+      button.classList.add("bad");
+      streak = 0;
+      mistakes += 1;
+      timeLeft = Math.max(0, timeLeft - 16);
+      sync();
+      if (mistakes >= 3) { endRun("Three mistakes"); return; }
+      setTimeout(() => {
+        if (!running) return;
+        locked = false;
+        button.classList.remove("bad");
+      }, 420);
+    }
+  }
+
+  function endRun(reason) {
+    running = false;
+    clearInterval(interval);
+    const overlay = el("overlay");
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = "Round over";
+    overlay.querySelector("p").textContent =
+      `${reason}. You scored ${score} points, reached level ${level} and answered with a best streak of ${streak}.`;
+    overlay.querySelector("button").textContent = "Play again";
+    sync();
+  }
+
+  function start() {
+    score = 0; streak = 0; level = 1; mistakes = 0; timeLeft = 100;
+    running = true;
+    clearInterval(interval);
+    interval = setInterval(() => {
+      if (!running) return;
+      timeLeft -= 1.9;
+      if (timeLeft <= 0) { timeLeft = 0; endRun("Time up"); return; }
+      sync();
+    }, 90);
+    sync();
+    makeQuestion();
+  }
+
+  el("start").addEventListener("click", () => {
+    el("overlay").classList.add("hidden");
+    start();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    const n = Number(event.key);
+    if (!running || Number.isNaN(n)) return;
+    const buttons = el("answers").querySelectorAll("button");
+    if (n >= 1 && n <= buttons.length) buttons[n - 1].click();
+  });
+
+  sync();
+  el("question").textContent = "Ready?";
+})();
+</script>
+</body>
+</html>

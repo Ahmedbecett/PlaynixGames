@@ -15,6 +15,7 @@ import { getContinuePlaying, getRecommendations } from "@/lib/recommend";
 import { CategoryChips } from "@/components/CategoryChips";
 import { GameRow, SectionHeader } from "@/components/GameRow";
 import { HeroCarousel } from "@/components/HeroCarousel";
+import { TelegramCta } from "@/components/TelegramCta";
 import { buildMetadata, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
@@ -121,6 +122,10 @@ export default async function HomePage() {
         detailsLabel={t("common.learnMore")}
         premiumLabel={t("common.premium")}
       />
+
+      <div className="mt-5">
+        <TelegramCta />
+      </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-[var(--color-muted)]">
         <span>

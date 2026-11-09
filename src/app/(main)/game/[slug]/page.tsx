@@ -7,6 +7,7 @@ import { getPublishedGameBySlug, getScreenshots, getSimilarGames, toCard } from 
 import { getDictionary, formatDate, formatNumber } from "@/lib/i18n";
 import { breadcrumbNode, buildMetadata, jsonLdGraph, videoGameNode } from "@/lib/seo";
 import { GameActions } from "@/components/GameActions";
+import { TelegramCta } from "@/components/TelegramCta";
 import { GameCard } from "@/components/GameCard";
 import { Icon } from "@/components/Icons";
 import { Reviews, type Review } from "@/components/Reviews";
@@ -169,6 +170,8 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
             />
           </div>
 
+          <TelegramCta variant="banner" startParam={`game_${game.slug}`} href={`/play/${game.slug}`} />
+
           {locked && (
             <div className="mt-4 rounded-xl border border-[rgba(139,92,246,.4)] p-3.5" style={{ background: "rgba(139,92,246,.1)" }}>
               <p className="flex items-center gap-2 text-sm font-bold">
@@ -215,6 +218,7 @@ export default async function GamePage({ params }: { params: Promise<{ slug: str
 
           <Reviews
             gameId={game.id}
+            gameSlug={game.slug}
             initialReviews={reviews}
             average={Number(game.rating_avg)}
             total={Number(game.rating_count)}

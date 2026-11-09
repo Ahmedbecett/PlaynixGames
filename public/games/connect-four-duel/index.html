@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#090B14">
+<title>Connect Four Duel</title>
+<style>
+  :root { --bg:#090B14; --card:#171E30; --accent:#FF7A18; --cyan:#22D3EE; --violet:#8B5CF6; --text:#F8FAFC;
+    --muted:#A1AABD; --red:#F87171; --yellow:#FBBF24; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    user-select:none; -webkit-user-select:none; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+  header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; font-size:11px;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  header b { display:block; font-size:15px; letter-spacing:0; }
+  #stage { flex:1; display:grid; place-items:center; padding:8px; min-height:0; position:relative; }
+  canvas { display:block; border-radius:18px; touch-action:none;
+    box-shadow:0 0 0 1px rgba(139,92,246,.25),0 18px 60px rgba(0,0,0,.6); }
+  #status { padding:6px 14px 16px; text-align:center; font-size:12.5px; font-weight:700; min-height:34px; }
+  #status .red { color:var(--red); }
+  #status .yellow { color:var(--yellow); }
+  #overlay { position:absolute; inset:0; display:grid; place-items:center; background:rgba(9,11,20,.88);
+    backdrop-filter:blur(6px); z-index:5; padding:16px; }
+  .panel { text-align:center; padding:24px 20px; border-radius:22px; background:var(--card);
+    border:1px solid rgba(34,211,238,.25); max-width:350px; }
+  .panel h1 { margin:0 0 6px; font-size:23px; background:linear-gradient(90deg,var(--cyan),var(--violet));
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .panel p { color:var(--muted); font-size:12.5px; line-height:1.65; margin:0 0 16px; }
+  .panel button { width:100%; padding:13px; border:0; border-radius:14px; font-weight:800; font-size:15px;
+    color:#0b0f18; background:linear-gradient(135deg,var(--accent),#ffb35c); box-shadow:0 10px 30px rgba(255,122,24,.35); }
+  .panel .ghost { margin-top:8px; background:rgba(23,30,48,.9); color:var(--text);
+    border:1px solid rgba(139,92,246,.35); box-shadow:none; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span>Red wins<b id="redScore">0</b></span>
+    <span>Yellow wins<b id="yellowScore">0</b></span>
+    <span>Draws<b id="draws">0</b></span>
+  </header>
+  <div id="stage">
+    <canvas id="game" width="640" height="560" aria-label="Connect four board"></canvas>
+    <div id="overlay">
+      <div class="panel">
+        <h1>Connect Four Duel</h1>
+        <p>Two players, one phone. Tap a column to drop your disc. Line up four in a row — horizontal, vertical or diagonal — to win the round.</p>
+        <button id="start">Play with a friend</button>
+        <button id="solo" class="ghost">Play against the bot</button>
+      </div>
+    </div>
+  </div>
+  <div id="status"></div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const el = (id) => document.getElementById(id);
+
+  const COLS = 7, ROWS = 6;
+  const RED = 1, YELLOW = 2;
+
+  let board = [];
+  let turn = RED;
+  let running = false;
+  let vsBot = false;
+  let hoverCol = -1;
+  let winner = 0;                // 0 = none, RED/YELLOW, 3 = draw
+  let winningCells = [];
+  let dropAnim = null;           // { col, row, player, t }
+  const tally = { red: 0, yellow: 0, draws: 0 };
+
+  let tile = 60, ox = 0, oy = 0, W = 640, H = 560;
+
+  function emptyBoard() {
+    return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  }
+
+  function reset(opts) {
+    board = emptyBoard();
+    turn = RED;
+    winner = 0;
+    winningCells = [];
+    dropAnim = null;
+    hoverCol = -1;
+    if (opts && typeof opts.vsBot === "boolean") vsBot = opts.vsBot;
+    running = true;
+    setStatus("red");
+    layout();
+  }
+
+  function setStatus(kind) {
+    const node = el("status");
+    if (kind === "red") node.innerHTML = '<span class="red">Red</span> to play';
+    else if (kind === "yellow") node.innerHTML = '<span class="yellow">Yellow</span> to play' + (vsBot ? " (bot)" : "");
+    else if (kind === "bot") node.textContent = "Bot is thinking…";
+  }
+
+  /* ------------------------------------------------------------ game logic */
+  function lowestRow(col) {
+    for (let row = ROWS - 1; row >= 0; row -= 1) {
+      if (board[row][col] === 0) return row;
+    }
+    return -1;
+  }
+
+  function drop(col, player) {
+    const row = lowestRow(col);
+    if (row < 0) return false;
+    board[row][col] = player;
+    dropAnim = { col, row, player, t: 0 };
+    const line = checkWin(row, col, player);
+    if (line) {
+      winner = player;
+      winningCells = line;
+      running = false;
+      if (player === RED) tally.red += 1; else tally.yellow += 1;
+      updateTally();
+    } else if (board.flat().every((cell) => cell !== 0)) {
+      winner = 3;
+      running = false;
+      tally.draws += 1;
+      updateTally();
+    } else {
+      turn = player === RED ? YELLOW : RED;
+      setStatus(turn === RED ? "red" : "yellow");
+      if (vsBot && turn === YELLOW && running) scheduleBot();
+    }
+    return true;
+  }
+
+  function checkWin(row, col, player) {
+    const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (const [dr, dc] of dirs) {
+      const line = [[row, col]];
+      for (const sign of [1, -1]) {
+        let r = row + dr * sign, c = col + dc * sign;
+        while (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r][c] === player) {
+          line.push([r, c]);
+          r += dr * sign; c += dc * sign;
+        }
+      }
+      if (line.length >= 4) return line;
+    }
+    return null;
+  }
+
+  function scheduleBot() {
+    setStatus("bot");
+    setTimeout(() => {
+      if (!running || !vsBot) return;
+      const col = chooseBotColumn();
+      if (col >= 0) {
+        drop(col, YELLOW);
+        finishTurnCleanup();
+      }
+    }, 430);
+  }
+
+  function finishTurnCleanup() {
+    if (winner === RED || winner === YELLOW) {
+      const name = winner === RED ? "Red" : "Yellow";
+      setTimeout(() => showResult(name + " wins!"), 420);
+    } else if (winner === 3) {
+      setTimeout(() => showResult("It's a draw"), 420);
+    }
+  }
+
+  /** Bot: win if possible, block if needed, otherwise prefer the centre. */
+  function chooseBotColumn() {
+    const order = [3, 2, 4, 1, 5, 0, 6];
+    // 1) take a winning move
+    for (const col of order) {
+      const row = lowestRow(col);
+      if (row < 0) continue;
+      board[row][col] = YELLOW;
+      const win = checkWin(row, col, YELLOW);
+      board[row][col] = 0;
+      if (win) return col;
+    }
+    // 2) block the opponent
+    for (const col of order) {
+      const row = lowestRow(col);
+      if (row < 0) continue;
+      board[row][col] = RED;
+      const win = checkWin(row, col, RED);
+      board[row][col] = 0;
+      if (win) return col;
+    }
+    // 3) otherwise play the most central legal column
+    for (const col of order) if (lowestRow(col) >= 0) return col;
+    return -1;
+  }
+
+  function showResult(message) {
+    const overlay = el("overlay");
+    overlay.classList.remove("hidden");
+    overlay.querySelector("h1").textContent = message;
+    overlay.querySelector("p").textContent =
+      `Play again to keep score — Red ${tally.red} · Yellow ${tally.yellow} · Draws ${tally.draws}.`;
+    overlay.querySelector("#start").textContent = vsBot ? "Play the bot again" : "Play again";
+  }
+
+  function updateTally() {
+    el("redScore").textContent = tally.red;
+    el("yellowScore").textContent = tally.yellow;
+    el("draws").textContent = tally.draws;
+  }
+
+  /* -------------------------------------------------------------- painting */
+  function layout() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    W = canvas.width; H = canvas.height;
+    tile = Math.floor(Math.min(W / COLS, H / ROWS));
+    ox = Math.floor((W - tile * COLS) / 2);
+    oy = Math.floor((H - tile * ROWS) / 2);
+    draw();
+  }
+
+  function discColor(player) {
+    return player === RED ? "#F87171" : player === YELLOW ? "#FBBF24" : "#0b1020";
+  }
+
+  function draw() {
+    const dpr = canvas.width / (canvas.getBoundingClientRect().width || 1);
+
+    ctx.clearRect(0, 0, W, H);
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#121a2c");
+    bg.addColorStop(1, "#080b14");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // board plate
+    ctx.fillStyle = "rgba(23,30,48,.92)";
+    ctx.beginPath();
+    ctx.roundRect(ox - 8, oy - 8, tile * COLS + 16, tile * ROWS + 16, 18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(139,92,246,.32)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    const radius = tile * 0.38;
+
+    for (let row = 0; row < ROWS; row += 1) {
+      for (let col = 0; col < COLS; col += 1) {
+        const cx = ox + col * tile + tile / 2;
+        const cy = oy + row * tile + tile / 2;
+        const player = board[row][col];
+
+        // socket
+        ctx.fillStyle = "#0a0f1c";
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (player) {
+          let y = cy;
+          if (dropAnim && dropAnim.row === row && dropAnim.col === col) {
+            // ease from the top of the board into place
+            const progress = Math.min(1, dropAnim.t / 16);
+            const from = oy + tile / 2;
+            y = from + (cy - from) * (1 - Math.pow(1 - progress, 3));
+          }
+          const gradient = ctx.createRadialGradient(cx - radius * 0.3, y - radius * 0.35, radius * 0.15, cx, y, radius);
+          gradient.addColorStop(0, player === RED ? "#FCA5A5" : "#FDE68A");
+          gradient.addColorStop(1, discColor(player));
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(cx, y, radius * 0.94, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        if (winningCells.some(([r, c]) => r === row && c === col)) {
+          ctx.strokeStyle = "#22D3EE";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius * 0.98, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // hover column indicator
+    if (running && hoverCol >= 0 && lowestRow(hoverCol) >= 0) {
+      ctx.fillStyle = turn === RED ? "rgba(248,113,113,.18)" : "rgba(251,191,36,.18)";
+      ctx.fillRect(ox + hoverCol * tile, oy, tile, tile * ROWS);
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    if (dropAnim) {
+      dropAnim.t += 1;
+      if (dropAnim.t > 16) {
+        dropAnim = null;
+        finishTurnCleanup();
+      }
+    }
+    draw();
+  }
+
+  /* ----------------------------------------------------------------- input */
+  function columnAt(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = canvas.width / (rect.width || 1);
+    const x = (clientX - rect.left) * dpr;
+    const y = (clientY - rect.top) * dpr;
+    if (y < oy - 40 || y > oy + tile * ROWS + 40) return -1;
+    const col = Math.floor((x - ox) / tile);
+    return col >= 0 && col < COLS ? col : -1;
+  }
+
+  canvas.addEventListener("pointermove", (event) => {
+    const col = columnAt(event.clientX, event.clientY);
+    if (col !== hoverCol) { hoverCol = col; }
+  });
+  canvas.addEventListener("pointerleave", () => { hoverCol = -1; });
+  canvas.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    if (!running || winner) return;
+    if (vsBot && turn === YELLOW) return;
+    const col = columnAt(event.clientX, event.clientY);
+    if (col < 0) return;
+    if (drop(col, turn)) finishTurnCleanup();
+  });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  el("start").addEventListener("click", () => {
+    el("overlay").classList.add("hidden");
+    reset({ vsBot: false });
+  });
+  el("solo").addEventListener("click", () => {
+    el("overlay").classList.add("hidden");
+    reset({ vsBot: true });
+  });
+
+  window.addEventListener("resize", layout);
+
+  board = emptyBoard();
+  updateTally();
+  layout();
+  animate();
+})();
+</script>
+</body>
+</html>
