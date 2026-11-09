@@ -32,8 +32,9 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
 1. `/setname` → **Playnix**
 2. `/setdescription` → *Search, discover and play instantly inside Telegram.*
 3. `/setabouttext` → *Your game search engine — thousands of games, instant play.*
-4. `/setuserpic` → upload `public/brand/icon-512.png` (regenerate with `npm run logo:png`)
-5. `/setcommands`:
+4. `/setprivacy` → `https://playnix-ashen.vercel.app/privacy`
+5. `/setuserpic` → upload `public/brand/telegram-avatar.png`
+6. `/setcommands`:
    ```
    start - Open Playnix
    games - Browse categories
@@ -45,9 +46,34 @@ Nothing works until the Mini App has a **public HTTPS URL**. `localhost` is not 
    help - Help
    language - Change language
    ```
-6. `/setjoingroups` → **Disable** (a Mini App bot has no reason to sit in groups).
+7. `/setjoingroups` → **Disable** (a Mini App bot has no reason to sit in groups).
+
+## 2b. Subscription funnel and welcome picture
+
+The bot is the sales channel, so `/start` is not a plain text greeting:
+
+- `sendPhoto` with `public/brand/welcome.jpg` (regenerate with `npm run welcome`) and an HTML caption.
+- Inline keyboard: **Play now** (mini app), **⭐ Subscribe to Premium** (`callback_data: premium:plans`),
+  **👑 Premium games** (mini app `/premium`).
+- `premium:plans` lists every active plan with a `buy:<planId>` button; tapping one calls
+  `createStarsInvoice` (which stores a `pending` row in `payments`) and replies with a **pay** URL button.
+  Paying inside the chat fires `successful_payment` at `/api/telegram/webhook`, which grants the
+  subscription and confirms the expiry date.
+- If Telegram rejects the photo (bad URL, oversized file), the handler falls back to a text message.
+- `scripts/ensure-bot.ts` also publishes `setMyCommands` on every deploy, so the blue menu lists
+  `/start`, `/subscribe`, `/premium`, `/popular`, `/new`, `/language`, `/help`.
+
+`npx tsx scripts/check-bot.ts` exercises the whole funnel offline (fetch is intercepted).
 
 ## 3. Register the webhook (bot side)
+
+> **On Vercel this is automatic.** `npm run build` starts with `prebuild`, which runs
+> `scripts/ensure-db.ts` and then `scripts/ensure-bot.ts`. Whenever `TELEGRAM_BOT_TOKEN`,
+> `TELEGRAM_WEBHOOK_SECRET` and an `https://` `NEXT_PUBLIC_APP_URL` are all present in the
+> project env, every deployment re-registers the webhook and the menu button against that URL
+> (log lines: `[playnix] Bot reachable: @…`, `[playnix] Webhook → …`, `[playnix] Menu button → …`).
+> Rotating the token or moving to a custom domain therefore only needs a redeploy. The manual
+> command below is still the way to do it locally or from a tunnel.
 
 ```bash
 # .env.local or host env must contain the real values

@@ -24,13 +24,24 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
   const { q } = await searchParams;
   const { dict, locale } = await getDictionary();
 
-  const users = await all<UserRow>(
-    `SELECT u.*, (SELECT COUNT(*) FROM play_history p WHERE p.user_id = u.id) AS plays
-     FROM users u
-     ${q ? "WHERE (u.username LIKE ? OR u.first_name LIKE ? OR u.telegram_id LIKE ?)" : ""}
-     ORDER BY u.created_at DESC LIMIT 200`,
-    q ? [`%${q}%`, `%${q}%`, `%${q}%`] : [],
-  );
+  // Conditional WHERE instead of `? IS NULL`: PostgreSQL rejects a NULL
+  // parameter without a type context, and LOWER() keeps the match
+  // case-insensitive on both SQLite (always) and PostgreSQL (by default not).
+  const needle = (q ?? "").trim();
+  const users = needle
+    ? await all<UserRow>(
+        `SELECT u.*, (SELECT COUNT(*) FROM play_history p WHERE p.user_id = u.id) AS plays
+         FROM users u
+         WHERE LOWER(u.username) LIKE LOWER(?) OR LOWER(u.first_name) LIKE LOWER(?)
+            OR u.telegram_id LIKE ?
+         ORDER BY u.created_at DESC LIMIT 200`,
+        [`%${needle}%`, `%${needle}%`, `%${needle}%`],
+      )
+    : await all<UserRow>(
+        `SELECT u.*, (SELECT COUNT(*) FROM play_history p WHERE p.user_id = u.id) AS plays
+         FROM users u
+         ORDER BY u.created_at DESC LIMIT 200`,
+      );
 
   return (
     <div className="fade-up">

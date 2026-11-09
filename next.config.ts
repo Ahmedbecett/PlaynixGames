@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { ADS_CSP, adsPublicConfig } from "./src/lib/ads-shared";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -18,6 +19,13 @@ const nextConfig: NextConfig = {
     // In development the app is reviewed inside the sandbox preview iframe, so
     // framing must stay open. Production locks framing to Telegram clients only.
     const isDev = process.env.NODE_ENV === "development";
+    // Ad hosts are only opened up when a rewarded-ad zone is configured, so the
+    // production CSP stays tight for deployments that do not monetise with ads.
+    const ads = adsPublicConfig();
+    const adScript = ads.enabled ? ` ${ADS_CSP.script.join(" ")}` : "";
+    const adConnect = ads.enabled ? ` ${ADS_CSP.connect.join(" ")}` : "";
+    const adFrame = ads.enabled ? ` ${ADS_CSP.frame.join(" ")}` : "";
+    const adMedia = ads.enabled ? ` ${ADS_CSP.media.join(" ")}` : "";
     const securityHeaders = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -40,13 +48,13 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               "img-src 'self' data: blob: https:",
-              "media-src 'self' blob: https:",
+              `media-src 'self' blob: https:${adMedia}`,
               process.env.NODE_ENV === "development"
-                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org"
-                : "script-src 'self' 'unsafe-inline' https://telegram.org",
+                ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org${adScript}`
+                : `script-src 'self' 'unsafe-inline' https://telegram.org${adScript}`,
               "style-src 'self' 'unsafe-inline'",
-              "frame-src 'self' https:",
-              "connect-src 'self' https:",
+              `frame-src 'self' https:${adFrame}`,
+              `connect-src 'self' https:${adConnect}`,
               "font-src 'self' data: https:",
               isDev
                 ? "frame-ancestors *"

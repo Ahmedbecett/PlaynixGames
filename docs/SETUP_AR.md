@@ -59,8 +59,9 @@ https://github.com/Ahmedbecett/PlaynixGames/pulls
 
 1. `/setname` → اختر بوتك → `Playnix`
 2. `/setdescription` → `Search, discover and play instantly inside Telegram.`
-3. `/setuserpic` → ارفع الصورة `public/brand/icon-512.png` من المستودع
-4. `/setcommands` → اختر بوتك ثم الصق:
+3. `/setprivacy` → `https://playnix-ashen.vercel.app/privacy`
+4. `/setuserpic` → ارفع الصورة `public/brand/telegram-avatar.png` من المستودع
+5. `/setcommands` → اختر بوتك ثم الصق:
    ```
    start - Open Playnix
    games - Browse categories

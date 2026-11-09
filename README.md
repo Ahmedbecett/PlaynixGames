@@ -11,14 +11,15 @@ Built as an independent product: own brand, own database, own code. Nothing is r
 | Area | Status | Notes |
 | --- | --- | --- |
 | Home, search, categories, game details | ✅ | Server-rendered, real DB queries, no mock data |
-| Instant play (HTML5) | ✅ | 6 licensed, self-hosted Playnix Originals, iframe player with pause/fullscreen/error handling |
+| Instant play (HTML5) | ✅ | 16 self-hosted Playnix Originals (7 free additions + 3 subscription titles in the latest drop), iframe player with pause/fullscreen/error handling |
 | Search engine | ✅ | Partial name, keywords, developer, category, tags; filters, sort, infinite scroll, recent + popular searches, suggest-a-game |
 | Telegram auth | ✅ | `initData` HMAC validation server-side, signed HttpOnly session, tested positive/negative |
 | Favorites, play history, ratings/reviews, reports | ✅ | Persisted per user, unique rating per account, server recomputes aggregates |
 | Premium gating | ✅ | Enforced in the player route and the play API, never in the client only |
+| Rewarded ads (Monetag) | ✅ off by default | Watch one ad → play one premium game for 20 min (3/day, server-issued pass). Config, policy and the browser wrapper are covered by `npm run ads:check`; no live ad was served in this sandbox |
 | Telegram Stars | ⚠️ implemented, needs a live bot | Invoice creation via Bot API, server-side fulfilment on `successful_payment`, idempotent replay protection, refund revocation. **Not executed against Telegram in this environment** (no outbound access to `api.telegram.org` here) |
 | Admin dashboard | ✅ | Real aggregates, game CRUD + URL verification, users, reviews, reports, ads, plans, announcements, logs, system health |
-| Bot commands | ⚠️ implemented, needs a live bot | `/start /games /search /popular /new /premium /profile /help /language` + broadcasts. Verified by code path, not by live Telegram round-trip |
+| Bot commands | ✅ | `/start /subscribe /premium /popular /new /language /help` + broadcasts; `/start` sends a branded photo with a one-tap Stars subscribe button (21 offline contract tests) |
 | i18n (ar / en / fr) + RTL | ✅ | Every UI string from typed dictionaries; Arabic flips to RTL |
 | Security | ✅ | CSP, HMAC sessions, admin roles, rate limits, SSRF-guarded URL checks, audit log, input validation |
 
@@ -32,7 +33,7 @@ Legend: ✅ verified locally · ⚠️ implemented, blocked on live credentials/
 cp .env.example .env.local     # fill in the values you have
 npm install
 npm run db:migrate             # creates the schema (SQLite locally)
-npm run db:seed                # 16 categories, 6 games, 3 premium plans
+npm run db:seed                # 16 categories, 16 games, 3 premium plans
 npm run dev                    # http://localhost:3000
 ```
 
@@ -95,13 +96,64 @@ docs/                      architecture, API, deployment, admin guide, testing, 
 
 ---
 
-## The six bundled games
+## The bundled games
 
-All six are **Playnix Originals** — original code and art owned by this project, so there is no third-party licensing risk in shipping them. Each one is a real game with touch + keyboard input, pause handling and local high scores.
+All sixteen are **Playnix Originals** — original code and generated art owned by this project, so there is no third-party licensing risk in shipping them. Each one is a real game with touch + keyboard input, pause handling and local high scores.
 
-`Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` · `Reversi Duel` (premium)
+Free: `Neon Serpent` · `Void Breaker` · `Astro Dodge` · `Block Cascade` · `Memory Matrix` ·
+`Tetra Stack` · `Tile Merge` · `Flap Quest` · `Maze Escape` · `Penalty Shot` · `Speed Runner` · `Sudoku Grid`
+
+Subscription: `Tower Guard` · `Dungeon Depths` · `Card Blitz` · `Reversi Duel`
 
 Licensing policy for adding third-party games: [`docs/GAME_SOURCES.md`](docs/GAME_SOURCES.md). **Publicly accessible ≠ free to redistribute** — nothing is published without a verified licence recorded in the `games.license` column.
+
+---
+
+## Rewarded ads
+
+Free users who hit a premium game get a second path besides subscribing: watch one short
+Monetag ad and play **that** game for a few minutes. The pass is issued server-side
+(`ad_reward_passes`), capped per day, and checked by both the player route and the play API —
+the browser only reports that the ad promise resolved.
+
+```bash
+NEXT_PUBLIC_ADS_ENABLED=true
+NEXT_PUBLIC_ADS_ZONE_ID=12207042
+npm run ads:check      # 30 offline checks (config, policy, jsdom SDK behaviour)
+```
+
+Full setup, formats (rewarded interstitial, rewarded popup, in-app interstitial), CSP notes and
+the honest anti-abuse limits: [`docs/ADS.md`](docs/ADS.md).
+
+## SDK
+
+`playnix-sdk` (in [`sdk/`](./sdk)) is a standalone, dependency-free TypeScript package for anyone
+building on top of this deployment — including its own bot.
+
+```bash
+npm run sdk:build      # ESM + CJS + .d.ts into sdk/dist
+npm run sdk:test       # 21 contract tests, run against the built package
+```
+
+```ts
+// browser / mini app
+import { initMiniApp, haptic, resolveStartParam, startParam } from "playnix-sdk";
+
+// server / bot
+import { TelegramBot, createWebhookHandler, parseStarsPayment, validateInitData } from "playnix-sdk/server";
+import { PlaynixClient } from "playnix-sdk";
+
+const playnix = new PlaynixClient({ baseUrl: "https://playnix-ashen.vercel.app" });
+await playnix.signIn(initData);                        // validates + stores the session cookie
+const { premium, subscription } = await playnix.me();
+```
+
+The app itself consumes it: `src/lib/telegram.ts` is a thin adapter over `playnix-sdk/server` (config + error
+mapping only), the webhook uses the SDK's constant-time secret check, and `/api/auth/telegram` uses the SDK's
+`initData` validation — the bot that runs in production and the published package share one implementation.
+`sdk:build` runs inside `prebuild`, so a fresh clone (and Vercel) builds the package before typechecking.
+
+Full reference (Arabic) and examples: [`sdk/README.md`](./sdk/README.md), [`sdk/examples`](./sdk/examples).
 
 ---
 
@@ -121,4 +173,4 @@ Never commit real credentials. `.env.local` is gitignored; only `.env.example` s
 
 ## License
 
-Application code © Playnix. The six games in `public/games/` are original works by this project and may not be redistributed separately without permission. Third-party dependencies keep their own licenses (see `package.json`).
+Application code © Playnix. The sixteen games in `public/games/` are original works by this project and may not be redistributed separately without permission. Third-party dependencies keep their own licenses (see `package.json`).

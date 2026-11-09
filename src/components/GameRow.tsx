@@ -50,7 +50,7 @@ export async function GameRow({
 }) {
   if (games.length === 0) return null;
   return (
-    <section className="mb-7" aria-labelledby={`row-${titleKey}`}>
+    <section className="mb-5" aria-labelledby={`row-${titleKey}`}>
       <div id={`row-${titleKey}`}>
         <SectionHeader titleKey={titleKey} href={href} />
       </div>

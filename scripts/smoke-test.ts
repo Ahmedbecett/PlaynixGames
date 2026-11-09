@@ -12,7 +12,7 @@
  *        BASE_URL=https://… npm run smoke
  */
 import crypto from "node:crypto";
-import { all, ensureSchema, one, run } from "../src/lib/db";
+import { all, dialect, ensureSchema, one, run } from "../src/lib/db";
 import { env } from "../src/lib/env";
 import { searchGames } from "../src/lib/games";
 import { fulfilStarsPayment } from "../src/lib/payments";
@@ -21,6 +21,10 @@ import { validateInitData } from "../src/lib/telegram";
 import { verifyGameUrl } from "../src/lib/verify-game";
 
 const BASE_URL = process.env.BASE_URL ?? "http://127.0.0.1:3000";
+// Split modes so the suite can run against a live deployment without writing to
+// the production database (HTTP only) or against a bare database (DB only).
+const HTTP_ONLY = process.env.SMOKE_HTTP_ONLY === "1";
+const DB_ONLY = process.env.SMOKE_DB_ONLY === "1";
 let pass = 0;
 let fail = 0;
 const failures: string[] = [];
@@ -51,13 +55,14 @@ function signInitData(params: Record<string, string>, token: string): string {
   return url.toString();
 }
 
-async function main() {
+async function runDatabaseChecks() {
   await ensureSchema();
 
   section("Database & catalog");
-  const tables = await all<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
-  ).catch(async () => all<{ name: string }>("SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public'"));
+  const tables =
+    dialect === "sqlite"
+      ? await all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      : await all<{ name: string }>("SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public'");
   check("schema has 20+ tables", tables.length >= 20, `${tables.length} tables`);
 
   const games = await all<{ title: string; slug: string; game_url: string | null; game_type: string; pricing_type: string; publication_status: string }>(
@@ -178,6 +183,9 @@ async function main() {
     await run("DELETE FROM users WHERE id = ?", [userId]);
   }
 
+}
+
+async function runHttpChecks() {
   section("HTTP surface");
   const headers = ["content-security-policy", "x-content-type-options", "referrer-policy"];
   // Production locks framing to Telegram; the dev preview must stay embeddable.
@@ -237,6 +245,12 @@ async function main() {
   } catch (error) {
     check("HTTP surface reachable", false, error instanceof Error ? error.message : "server not running");
   }
+
+}
+
+async function main() {
+  if (!HTTP_ONLY) await runDatabaseChecks();
+  if (!DB_ONLY) await runHttpChecks();
 
   console.log(`\n${pass} passed, ${fail} failed`);
   if (fail > 0) {

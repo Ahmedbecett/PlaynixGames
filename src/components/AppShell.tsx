@@ -44,12 +44,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-shell">
-      <header className="safe-top sticky top-0 z-40" style={{ background: "rgba(9,11,20,.82)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(139,92,246,.14)" }}>
-        <div className="page flex items-center gap-3 py-2.5">
-          <Link href="/" className="flex items-center gap-2" aria-label={t("brand.name")}>
+      <header className="safe-top sticky top-0 z-40" style={{ background: "rgba(9,11,20,.88)", backdropFilter: "blur(18px)", borderBottom: "1px solid rgba(139,92,246,.14)" }}>
+        <div className="page flex items-center gap-2 py-1.5">
+          <Link href="/" className="flex min-w-0 items-center gap-2" aria-label={t("brand.name")}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/logo-mark.svg" alt="" width={38} height={38} className="rounded-xl" />
-            <span className="hidden text-lg font-extrabold tracking-tight sm:block">{t("brand.name")}</span>
+            <img src="/brand/logo-mark.svg" alt="" width={32} height={32} className="rounded-lg" />
+            <span className="truncate text-[15px] font-extrabold tracking-tight">{t("brand.name")}</span>
           </Link>
 
           <nav className="ms-2 hidden items-center gap-1 md:flex" aria-label={t("nav.home")}>
@@ -66,8 +66,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="ms-auto flex items-center gap-1.5">
             {premiumStatus.premium && (
-              <span className="chip hidden sm:inline-flex" style={{ color: "#cbb6ff", borderColor: "rgba(139,92,246,.5)" }}>
-                <Icon name="crown" size={14} />
+              <span className="chip" style={{ color: "#cbb6ff", borderColor: "rgba(139,92,246,.5)", padding: "0.28rem 0.55rem" }}>
+                <Icon name="crown" size={12} />
                 {t("common.premium")}
               </span>
             )}
@@ -88,12 +88,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
         </div>
-        <div className="page pb-2.5">
+        <div className="page pb-1.5">
           <HeaderSearch />
         </div>
       </header>
 
-      <main className="page flex-1 pt-4">
+      <main className="page flex-1 pt-3">
         {showPreview && <PreviewAuth />}
         {user?.status === "suspended" && (
           <div className="mb-4 rounded-xl p-3 text-sm" style={{ background: "rgba(239,68,68,.1)", border: "1px solid rgba(239,68,68,.4)" }}>
@@ -103,12 +103,29 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <footer className="page hidden pt-2 text-center text-[11px] text-[var(--color-muted)] md:block">
+      <footer className="page pt-4 pb-6 text-center text-[11px] text-[var(--color-muted)]">
         <div className="divider mb-3" />
+        <nav className="mb-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 font-semibold">
+          <Link href="/about" className="hover:text-[var(--color-cream)]">
+            {t("footer.about")}
+          </Link>
+          <Link href="/privacy" className="hover:text-[var(--color-cream)]">
+            {t("footer.privacy")}
+          </Link>
+          <Link href="/terms" className="hover:text-[var(--color-cream)]">
+            {t("footer.terms")}
+          </Link>
+          <a href="https://t.me/PlayNixGamesBot" className="hover:text-[var(--color-cream)]" rel="noreferrer">
+            {t("footer.telegram")}
+          </a>
+          {isAdmin(user) && (
+            <Link href="/admin" className="hover:text-[var(--color-cream)]">
+              {t("profile.adminPanel")}
+            </Link>
+          )}
+        </nav>
         <p className="mb-1">{t("footer.legal")}</p>
-        <p>
-          © {new Date().getFullYear()} Playnix · {isAdmin(user) && <Link href="/admin" className="underline">{t("profile.adminPanel")}</Link>}
-        </p>
+        <p>© {new Date().getFullYear()} Playnix</p>
       </footer>
 
       <BottomNav />

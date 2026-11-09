@@ -93,6 +93,9 @@ export const env = {
   get botConfigured(): boolean {
     return Boolean(optional("TELEGRAM_BOT_TOKEN"));
   },
+  get adsZoneId(): string | undefined {
+    return optional("NEXT_PUBLIC_ADS_ZONE_ID");
+  },
 };
 
 /** Redacted view of the configuration, safe to render in the admin system panel. */
@@ -104,5 +107,10 @@ export function configStatus() {
     { key: "admins", ok: env.adminTelegramIds.length > 0, detail: `${env.adminTelegramIds.length} admin id(s) allowlisted` },
     { key: "database", ok: true, detail: env.databaseUrl ? "postgres" : "sqlite (local)" },
     { key: "object_storage", ok: Boolean(env.s3), detail: env.s3 ? "S3 configured" : "local disk uploads" },
+    {
+      key: "rewarded_ads",
+      ok: Boolean(env.adsZoneId) && process.env.NEXT_PUBLIC_ADS_ENABLED !== "false",
+      detail: env.adsZoneId ? `Monetag zone ${env.adsZoneId}` : "NEXT_PUBLIC_ADS_ZONE_ID missing",
+    },
   ];
 }
