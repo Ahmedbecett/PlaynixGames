@@ -106,7 +106,13 @@ export function configStatus() {
     { key: "session_secret", ok: Boolean(optional("SESSION_SECRET")), detail: optional("SESSION_SECRET") ? "configured" : "using development fallback" },
     { key: "admins", ok: env.adminTelegramIds.length > 0, detail: `${env.adminTelegramIds.length} admin id(s) allowlisted` },
     { key: "database", ok: true, detail: env.databaseUrl ? "postgres" : "sqlite (local)" },
-    { key: "object_storage", ok: Boolean(env.s3), detail: env.s3 ? "S3 configured" : "local disk uploads" },
+    {
+      key: "object_storage",
+      // Uploads always work: S3 when configured, the database on a read-only
+      // filesystem (Vercel), the local disk otherwise. See storeImage().
+      ok: true,
+      detail: env.s3 ? "S3 configured" : env.databaseUrl ? "database-backed uploads" : "local disk uploads",
+    },
     {
       key: "rewarded_ads",
       ok: Boolean(env.adsZoneId) && process.env.NEXT_PUBLIC_ADS_ENABLED !== "false",
