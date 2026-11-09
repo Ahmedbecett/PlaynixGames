@@ -79,7 +79,9 @@ Watch out for `COUNT(*)`: Postgres returns `int8` as a string. Wrap it in
 - `en` is complete and is the type source: `type DictKey = keyof typeof en`.
 - `ar` and `fr` are `Record<DictKey, string>` — a missing key is a **build
   error**, which is deliberate for locales we ship as complete.
-- `es` and `ru` are `PartialDict` — partial by design, falling back to English.
+- `es` and `ru` are `PartialDict` — typed as partial so a new key never breaks
+  the build. Both are currently complete; a key added to `en` without an `es` or
+  `ru` entry falls back to English rather than failing.
 
 Adding a string:
 

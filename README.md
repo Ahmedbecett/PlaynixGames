@@ -226,16 +226,16 @@ Adding your own: [`docs/GAME_DEVELOPMENT.md`](docs/GAME_DEVELOPMENT.md).
 ## Internationalisation
 
 Every UI string lives in `src/lib/i18n/dictionary.ts`. English is the source of
-truth and is complete; other locales may be partial and fall back to English at
-runtime, so a half-finished translation never shows a raw key.
+truth; a locale may be partial and fall back to English at runtime, so a
+half-finished translation never shows a raw key.
 
 | Locale | Coverage |
 | --- | --- |
-| English | 100% |
-| Arabic (RTL) | 100% |
-| French | 100% |
-| Spanish | in progress |
-| Russian | in progress |
+| English | 361/361 (100%) |
+| Arabic (RTL) | 361/361 (100%) |
+| French | 361/361 (100%) |
+| Spanish | 361/361 (100%) |
+| Russian | 361/361 (100%) |
 
 ```bash
 npm run i18n:coverage          # table of every locale

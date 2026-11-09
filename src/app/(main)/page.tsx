@@ -99,7 +99,22 @@ export default async function HomePage() {
 
   const canFavorite = Boolean(data.user && data.user.status === "active");
   const lockedIds = new Set<string>(premiumStatus.premium ? [] : data.premium.map((game) => game.id));
-  const cards = (rows: GameRecord[]): GameCardData[] => rows.map(toCard);
+  /**
+   * A game should appear once on the home page. Every row is ordered by a
+   * different key, but with no plays the "trending" and "newest" sorts collapse
+   * onto the same rows, and the same cover ends up in two sections. Each
+   * section claims its games first, and a later section quietly drops any it
+   * has already shown (GameRow renders nothing when the list is empty).
+   */
+  const shown = new Set<string>();
+  const cards = (rows: GameRecord[]): GameCardData[] =>
+    rows
+      .filter((row) => {
+        if (shown.has(row.id)) return false;
+        shown.add(row.id);
+        return true;
+      })
+      .map(toCard);
 
   const heroSource = (data.featured.length > 0 ? data.featured : data.trending).slice(0, 6);
   const heroGames = heroSource.map((game) => ({
