@@ -56,7 +56,10 @@ const { handleUpdate } = await import("../src/lib/bot");
 await ensureSchema();
 await seedCatalog();
 
-const CHAT = 8506161202;
+// A throwaway id for the fake Telegram user these assertions send as. It is
+// deliberately not a real account: this file is in a public repository, and the
+// admin allow-list lives in ADMIN_TELEGRAM_IDS, never in source.
+const CHAT = 1000000001;
 const FROM = { id: CHAT, first_name: "Tester", username: "tester", language_code: "ar" };
 let updateId = 1;
 
